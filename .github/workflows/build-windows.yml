@@ -9,11 +9,15 @@ jobs:
    - name: Configure
      run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
    - name: Build
-     run: cmake --build build --config Release --target JerzyDrumMachine_VST3
+     run: cmake --build build --config Release --target JerzyDrumMachine_VST3 JerzyDrumMachine_Standalone
    - name: Package
      shell: pwsh
-     run: Compress-Archive -Path "build/JerzyDrumMachine_artefacts/Release/VST3/Jerzy Drum Machine.vst3" -DestinationPath "JerzyDrumMachine-Windows-x64.zip"
+     run: |
+      Compress-Archive -Path "build/JerzyDrumMachine_artefacts/Release/VST3/Jerzy Drum Machine.vst3" -DestinationPath "JerzyDrumMachine-VST3-Windows-x64.zip"
+      Compress-Archive -Path "build/JerzyDrumMachine_artefacts/Release/Standalone/Jerzy Drum Machine.exe" -DestinationPath "JerzyDrumMachine-Standalone-Windows-x64.zip"
    - uses: actions/upload-artifact@v4
      with:
       name: JerzyDrumMachine-Windows-x64
-      path: JerzyDrumMachine-Windows-x64.zip
+      path: |
+       JerzyDrumMachine-VST3-Windows-x64.zip
+       JerzyDrumMachine-Standalone-Windows-x64.zip
