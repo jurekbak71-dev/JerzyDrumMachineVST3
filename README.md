@@ -12,3 +12,6 @@
 - GUI: czarny bakelit, stara miedź, bursztynowe podświetlenie; trzy strony SEQ/SOUND/MIX
 
 Każdy push uruchamia Windows build i publikuje ZIP VST3 jako artifact GitHub Actions.
+
+
+Build status: CI validation enabled.
