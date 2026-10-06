@@ -1,13 +1,21 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-static juce::AudioProcessor::BusesProperties makeOutputBuses(){
- juce::AudioProcessor::BusesProperties b;
- b=b.withOutput("Master",juce::AudioChannelSet::stereo(),true);
- static const char* n[]={"Kick","Snare","Tom","Metal Hat","FM Perc","Phase Perc","Wave Metal","Noise Reso","Sample 1","Sample 2","Sample 3","Synth"};
- for(auto* name:n)b=b.withOutput(name,juce::AudioChannelSet::stereo(),false);
- return b;
-}
-JerzyDrumMachineAudioProcessor::JerzyDrumMachineAudioProcessor():AudioProcessor(makeOutputBuses()),apvts(*this,nullptr,"STATE",layout()){}
+JerzyDrumMachineAudioProcessor::JerzyDrumMachineAudioProcessor()
+ : AudioProcessor(BusesProperties()
+      .withOutput("Master", juce::AudioChannelSet::stereo(), true)
+      .withOutput("Kick", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Snare", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Tom", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Metal Hat", juce::AudioChannelSet::stereo(), false)
+      .withOutput("FM Perc", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Phase Perc", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Wave Metal", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Noise Reso", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Sample 1", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Sample 2", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Sample 3", juce::AudioChannelSet::stereo(), false)
+      .withOutput("Synth", juce::AudioChannelSet::stereo(), false)),
+   apvts(*this, nullptr, "STATE", layout()) {}
 juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcessor::layout(){
  std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
  p.push_back(std::make_unique<juce::AudioParameterFloat>("drive","Master Drive",juce::NormalisableRange<float>(0.5f,3.0f),1.15f));
