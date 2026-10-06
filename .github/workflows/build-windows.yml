@@ -25,7 +25,18 @@ jobs:
      run: cmake --build build --config Release --target JerzyDrumMachineTests
    - name: Run DSP smoke test
      shell: pwsh
-     run: '& "build/JerzyDrumMachineTests_artefacts/Release/JerzyDrumMachineTests.exe"'
+     run: |
+      $testPath = "build/JerzyDrumMachineTests_artefacts/Release/JerzyDrumMachineTests.exe"
+      & $testPath
+      $testExitCode = $LASTEXITCODE
+      if (Test-Path "smoke-diagnostics.txt") {
+       Get-Content "smoke-diagnostics.txt" | Write-Output
+      } else {
+       Write-Output "DSP smoke test did not create smoke-diagnostics.txt"
+      }
+      if ($testExitCode -ne 0) {
+       throw "DSP smoke test failed with exit code $testExitCode"
+      }
    - name: Package
      shell: pwsh
      run: |
