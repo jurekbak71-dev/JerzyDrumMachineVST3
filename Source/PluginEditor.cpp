@@ -3,7 +3,7 @@ static const char* names[]={"KICK","SNARE","TOM","METAL HAT","FM PERC","PHASE PE
 
 JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(JerzyDrumMachineAudioProcessor&x):AudioProcessorEditor(&x),p(x){
  setLookAndFeel(&copper);setSize(1280,800);setResizable(true,true);setResizeLimits(1080,700,1920,1080);
- for(auto*b:{&seq,&sound,&mix,&drummer,&run,&generate,&mutate,&fill,&loadSample,&showSynthKeyboard,&saveKit,&loadKit})addAndMakeVisible(*b);
+ for(auto*b:{&seq,&sound,&mix,&drummer,&run,&generate,&mutate,&fill,&loadSample,&saveKit,&loadKit})addAndMakeVisible(*b);addAndMakeVisible(showSynthKeyboard);
  seq.setClickingTogglesState(true);sound.setClickingTogglesState(true);mix.setClickingTogglesState(true);seq.setToggleState(true,juce::dontSendNotification);
  auto setPage=[this](int pg){page=pg;seq.setToggleState(pg==0,juce::dontSendNotification);sound.setToggleState(pg==1,juce::dontSendNotification);mix.setToggleState(pg==2,juce::dontSendNotification);drummer.setToggleState(pg==3,juce::dontSendNotification);resized();repaint();};
  seq.onClick=[setPage]{setPage(0);};sound.onClick=[setPage]{setPage(1);};mix.onClick=[setPage]{setPage(2);};drummer.onClick=[setPage]{setPage(3);};
