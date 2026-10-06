@@ -35,11 +35,16 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  loadSample.onClick=[this]{if(selected<8||selected>10)return;chooser=std::make_unique<juce::FileChooser>("Load WAV sample",juce::File{},"*.wav;*.aif;*.aiff");auto flags=juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles;chooser->launchAsync(flags,[this](const juce::FileChooser&fc){auto file=fc.getResult();if(file.existsAsFile())p.engine.loadSample(selected-8,file);repaint();});};
 
  for(int i=0;i<12;i++){
-  for(auto*s:{&channelGain[i],&channelPan[i],&revSend[i],&delSend[i]}){addAndMakeVisible(*s);s->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s->setTextBoxStyle(juce::Slider::NoTextBox,false,0,0);}
+  for(auto*s:{&channelGain[i],&channelPan[i],&channelFilter[i],&channelDrive[i],&revSend[i],&delSend[i]}){addAndMakeVisible(*s);s->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s->setTextBoxStyle(juce::Slider::NoTextBox,false,0,0);}
+  addAndMakeVisible(channelMute[i]);addAndMakeVisible(channelSolo[i]);channelMute[i].setButtonText("M");channelSolo[i].setButtonText("S");channelMute[i].setClickingTogglesState(true);channelSolo[i].setClickingTogglesState(true);
   channelGain[i].setRange(0,1.5,.01);channelGain[i].setValue(p.engine.gain[i]);channelGain[i].onValueChange=[this,i]{p.engine.gain[i]=(float)channelGain[i].getValue();};
   channelPan[i].setRange(-1,1,.01);channelPan[i].setValue(p.engine.panorama[i]);channelPan[i].onValueChange=[this,i]{p.engine.panorama[i]=(float)channelPan[i].getValue();};
+  channelFilter[i].setRange(0,1,.01);channelFilter[i].setValue(p.engine.channelFilter[i]);channelFilter[i].onValueChange=[this,i]{p.engine.channelFilter[i]=(float)channelFilter[i].getValue();};
+  channelDrive[i].setRange(0,1,.01);channelDrive[i].setValue(p.engine.channelDrive[i]);channelDrive[i].onValueChange=[this,i]{p.engine.channelDrive[i]=(float)channelDrive[i].getValue();};
   revSend[i].setRange(0,1,.01);revSend[i].setValue(p.engine.reverbSend[i]);revSend[i].onValueChange=[this,i]{p.engine.reverbSend[i]=(float)revSend[i].getValue();};
   delSend[i].setRange(0,1,.01);delSend[i].setValue(p.engine.delaySend[i]);delSend[i].onValueChange=[this,i]{p.engine.delaySend[i]=(float)delSend[i].getValue();};
+  channelMute[i].setToggleState(p.engine.mute[i],juce::dontSendNotification);channelSolo[i].setToggleState(p.engine.solo[i],juce::dontSendNotification);
+  channelMute[i].onClick=[this,i]{p.engine.mute[i]=channelMute[i].getToggleState();};channelSolo[i].onClick=[this,i]{p.engine.solo[i]=channelSolo[i].getToggleState();};
  }
  addAndMakeVisible(masterDrive);masterDrive.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);masterDrive.setTextBoxStyle(juce::Slider::TextBoxBelow,false,62,18);masterDrive.setRange(.5,3,.01);masterDrive.setValue(p.engine.drive);masterDrive.onValueChange=[this]{p.engine.drive=(float)masterDrive.getValue();};
  for(auto&s:fxParam){addAndMakeVisible(s);s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s.setTextBoxStyle(juce::Slider::TextBoxBelow,false,54,18);}
@@ -118,7 +123,7 @@ void JerzyDrumMachineAudioProcessorEditor::paint(juce::Graphics&g){
  }
  if(page==2){
   panel(g,{18,112,(float)getWidth()-36,498});panel(g,{18,625,(float)getWidth()-36,120});
-  g.setColour(juce::Colour(0xff9d6b43));g.setFont(11);g.drawText("LEVEL",24,248,72,18,juce::Justification::centred);g.drawText("PAN",24,330,72,18,juce::Justification::centred);g.drawText("REVERB",24,412,72,18,juce::Justification::centred);g.drawText("DELAY",24,494,72,18,juce::Justification::centred);
+  g.setColour(juce::Colour(0xff9d6b43));g.setFont(11);g.drawText("LEVEL",24,180,72,18,juce::Justification::centred);g.drawText("PAN",24,238,72,18,juce::Justification::centred);g.drawText("FILTER",24,296,72,18,juce::Justification::centred);g.drawText("DRIVE",24,354,72,18,juce::Justification::centred);g.drawText("REVERB",24,412,72,18,juce::Justification::centred);g.drawText("DELAY",24,470,72,18,juce::Justification::centred);g.drawText("M / S",24,530,72,18,juce::Justification::centred);
   int cw=(getWidth()-120)/12;g.setColour(juce::Colour(0xffd7a35f));for(int i=0;i<12;i++)g.drawFittedText(names[i],92+i*cw,132,cw-4,26,juce::Justification::centred,2);
   g.setColour(juce::Colour(0xff8f603d));g.drawText("GLOBAL FX / MASTER",32,633,200,20,juce::Justification::centredLeft);
  static const char*fxn[]={"REV SIZE","DAMP","DLY TIME","FEEDBACK","DLY MIX","BASS","TREBLE","COMP"};for(int i=0;i<8;i++){g.setColour(juce::Colour(0xffc18a4e));g.drawText(fxn[i],210+i*105,638,96,18,juce::Justification::centred);}
@@ -144,6 +149,6 @@ void JerzyDrumMachineAudioProcessorEditor::resized(){
  loadSample.setVisible(isSound&&selected>=8&&selected<=10);loadSample.setBounds(w/2-72,326,144,36);saveKit.setVisible(isSound);loadKit.setVisible(isSound);saveKit.setBounds(34,642,112,34);loadKit.setBounds(154,642,112,34);
  for(int i=0;i<4;i++){soundParam[i].setVisible(isSound);soundParam[i].setBounds(305+i*165,338,140,120);}
 
- int cw=(w-120)/12;for(int i=0;i<12;i++){int x=92+i*cw;channelGain[i].setVisible(isMix);channelPan[i].setVisible(isMix);revSend[i].setVisible(isMix);delSend[i].setVisible(isMix);channelGain[i].setBounds(x,170,cw-4,78);channelPan[i].setBounds(x,252,cw-4,78);revSend[i].setBounds(x,334,cw-4,78);delSend[i].setBounds(x,416,cw-4,78);}
+ int cw=(w-120)/12;for(int i=0;i<12;i++){int x=92+i*cw;channelGain[i].setVisible(isMix);channelPan[i].setVisible(isMix);channelFilter[i].setVisible(isMix);channelDrive[i].setVisible(isMix);revSend[i].setVisible(isMix);delSend[i].setVisible(isMix);channelMute[i].setVisible(isMix);channelSolo[i].setVisible(isMix);channelGain[i].setBounds(x,156,cw-4,58);channelPan[i].setBounds(x,214,cw-4,58);channelFilter[i].setBounds(x,272,cw-4,58);channelDrive[i].setBounds(x,330,cw-4,58);revSend[i].setBounds(x,388,cw-4,58);delSend[i].setBounds(x,446,cw-4,58);int bw=juce::jmax(20,(cw-10)/2);channelMute[i].setBounds(x+2,518,bw,27);channelSolo[i].setBounds(x+bw+5,518,bw,27);}
  for(int i=0;i<8;i++){fxParam[i].setVisible(isMix);fxParam[i].setBounds(210+i*105,660,96,72);}masterDrive.setVisible(isMix);masterDrive.setBounds(w-130,660,90,72);
 }
