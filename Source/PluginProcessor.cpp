@@ -15,7 +15,7 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  juce::ScopedNoDenormals no; engine.drive=apvts.getRawParameterValue("drive")->load(); engine.setSwing(apvts.getRawParameterValue("swing")->load());
  double bpm=120; bool playing=true; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
  engine.setHost(bpm,playing);
- for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOn()){int note=msg.getNoteNumber();if(note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else if(note>=60&&note<92)engine.setPattern(note-60);}}
+ for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOn()){int note=msg.getNoteNumber();if(note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else if(note>=60&&note<92)engine.requestPattern(note-60);}}
  engine.process(b); m.clear();
 }
 void JerzyDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock&d){auto xml=apvts.copyState().createXml();copyXmlToBinary(*xml,d);}
