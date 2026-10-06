@@ -18,7 +18,7 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOn()){int note=msg.getNoteNumber();if(note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else if(note>=60&&note<92)engine.requestPattern(note-60);}}
  engine.process(b); m.clear();
 }
-void JerzyDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock&d){auto xml=apvts.copyState().createXml();copyXmlToBinary(*xml,d);}
-void JerzyDrumMachineAudioProcessor::setStateInformation(const void*d,int n){if(auto x=getXmlFromBinary(d,n))apvts.replaceState(juce::ValueTree::fromXml(*x));}
+void JerzyDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock&d){auto state=apvts.copyState();state.addChild(engine.saveState(),-1,nullptr);auto xml=state.createXml();copyXmlToBinary(*xml,d);}
+void JerzyDrumMachineAudioProcessor::setStateInformation(const void*d,int n){if(auto x=getXmlFromBinary(d,n)){auto state=juce::ValueTree::fromXml(*x);if(auto eng=state.getChildWithName("ENGINE");eng.isValid())engine.loadState(eng);apvts.replaceState(state);}}
 juce::AudioProcessorEditor* JerzyDrumMachineAudioProcessor::createEditor(){return new JerzyDrumMachineAudioProcessorEditor(*this);}
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new JerzyDrumMachineAudioProcessor();}
