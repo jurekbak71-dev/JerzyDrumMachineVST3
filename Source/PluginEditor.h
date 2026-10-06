@@ -7,6 +7,8 @@ public:
  CopperLookAndFeel(){
   setColour(juce::TextButton::textColourOffId, juce::Colour(0xffd7a45d));
   setColour(juce::TextButton::textColourOnId, juce::Colour(0xffffd58a));
+  setColour(juce::TextButton::buttonColourId, juce::Colour(0xff211713));
+  setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff6d3b20));
   setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff17110e));
   setColour(juce::ComboBox::outlineColourId, juce::Colour(0xff7b492d));
   setColour(juce::ComboBox::textColourId, juce::Colour(0xffe1b46f));
@@ -14,12 +16,13 @@ public:
   setColour(juce::Slider::textBoxTextColourId, juce::Colour(0xffe1b46f));
   setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff100d0b));
   setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff65402a));
+  setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xffefb762));
  }
  void drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour&, bool over, bool down) override {
   auto r=b.getLocalBounds().toFloat().reduced(1.0f);
   const bool on=b.getToggleState();
-  juce::Colour top=on?juce::Colour(0xff6d3b20):juce::Colour(0xff211713);
-  juce::Colour bottom=on?juce::Colour(0xff3b2116):juce::Colour(0xff0d0b0a);
+  juce::Colour top=b.findColour(on?juce::TextButton::buttonOnColourId:juce::TextButton::buttonColourId);
+  juce::Colour bottom=on?top.darker(.48f):top.darker(.58f);
   if(over){top=top.brighter(.08f);bottom=bottom.brighter(.05f);}
   if(down){top=top.darker(.15f);bottom=bottom.darker(.1f);}
   g.setGradientFill(juce::ColourGradient(top,r.getTopLeft(),bottom,r.getBottomLeft(),false));
@@ -35,7 +38,7 @@ public:
   g.setGradientFill(juce::ColourGradient(juce::Colour(0xff473329),k.getTopLeft(),juce::Colour(0xff15100e),k.getBottomRight(),false));g.fillEllipse(k);
   g.setColour(juce::Colour(0xff8b5a36));g.drawEllipse(k,1.5f);
   auto a=start+pos*(end-start);juce::Path p;p.startNewSubPath(c);p.lineTo(c+juce::Point<float>(std::sin(a),-std::cos(a))*d*.38f);
-  g.setColour(juce::Colour(0xffefb762));g.strokePath(p,juce::PathStrokeType(2.2f));
+  g.setColour(s.findColour(juce::Slider::rotarySliderFillColourId));g.strokePath(p,juce::PathStrokeType(2.2f));
  }
  void drawLinearSlider(juce::Graphics& g,int x,int y,int w,int h,float pos,float min,float max,const juce::Slider::SliderStyle style,juce::Slider& s) override {
   if(style==juce::Slider::LinearHorizontal){
@@ -69,13 +72,14 @@ private:
  void syncSongSlots();
  void attachSoundParameters();
  JerzyDrumMachineAudioProcessor&p; CopperLookAndFeel copper; int page=0,selected=0;
- juce::TextButton seq{"SEQ"},sound{"SOUND"},mix{"MIX"},drummer{"DRUMMER"},songPage{"SONG"},run{"RUN"},generate{"GENERATE"},mutate{"MUTATE"},fill{"FILL"};
+ juce::TextButton seq{"SEQ"},sound{"SOUND"},mix{"MIX"},fxPage{"FX"},drummer{"DRUMMER"},songPage{"SONG"},run{"RUN"},generate{"GENERATE"},mutate{"MUTATE"},fill{"FILL"};
  std::array<juce::TextButton,12> instruments; std::array<bool,12> instrumentHover{}; std::array<juce::TextButton,16> steps; std::array<juce::TextButton,4> banks;
- juce::TextButton loadSample{"LOAD WAV"}; std::unique_ptr<juce::FileChooser> chooser; juce::ToggleButton showSynthKeyboard{"SHOW MIDI KEYBOARD"}; std::array<juce::TextButton,12> synthKeys;
- std::array<juce::Slider,12> channelGain,channelPan,channelFilter,channelDrive,revSend,delSend; std::array<juce::TextButton,12> channelMute,channelSolo; juce::Slider masterDrive; std::array<juce::Slider,8> fxParam;
+ juce::TextButton loadSample{"LOAD WAV"}; std::unique_ptr<juce::FileChooser> chooser; juce::ToggleButton showSynthKeyboard{"SHOW MIDI KEYBOARD"}; std::array<juce::TextButton,24> synthKeys;
+ std::array<juce::Slider,12> channelGain,channelPan,channelFilter,channelDrive,revSend,delSend; std::array<juce::TextButton,12> channelMute,channelSolo; juce::Slider masterDrive; std::array<juce::Slider,13> fxParam;
+ juce::ToggleButton reverbEnable{"REVERB ON"},delayEnable{"DELAY ON"},delayPingPong{"PING-PONG"},compressorEnable{"COMP ON"};
  using SliderAttachment=juce::AudioProcessorValueTreeState::SliderAttachment; using ButtonAttachment=juce::AudioProcessorValueTreeState::ButtonAttachment;
  std::array<std::unique_ptr<SliderAttachment>,12> gainAtt,panAtt,filterAtt,driveAtt,revAtt,delAtt; std::array<std::unique_ptr<ButtonAttachment>,12> muteAtt,soloAtt;
- std::array<std::unique_ptr<SliderAttachment>,4> soundAtt; std::array<std::unique_ptr<SliderAttachment>,8> fxAtt; std::unique_ptr<SliderAttachment> masterDriveAtt;
+ std::array<std::unique_ptr<SliderAttachment>,4> soundAtt; std::array<std::unique_ptr<SliderAttachment>,13> fxAtt; std::array<std::unique_ptr<ButtonAttachment>,4> fxButtonAtt; std::unique_ptr<SliderAttachment> masterDriveAtt;
  std::array<juce::Slider,4> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet;
  juce::ToggleButton stepAccent{"ACCENT"},stepFlam{"FLAM"}; juce::Slider patternLength,stepMicro;
  juce::ComboBox patternSelect,changeMode,stepNote; std::array<juce::Slider,8> genParam;

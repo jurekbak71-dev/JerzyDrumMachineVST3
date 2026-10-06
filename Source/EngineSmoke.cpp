@@ -23,6 +23,19 @@ int main(){
   for(int ch=0;ch<2;ch++)for(int i=0;i<b.getNumSamples();i++){auto x=b.getSample(ch,i);if(!std::isfinite(x)){log("FAIL: non-finite audio");return 4;}energy+=std::abs(x);}
   log(std::string("SMOKE: energy=")+std::to_string(energy));
   if(!(energy>1.0)){log("FAIL: engine produced silence");return 2;}
+  auto renderAnalog=[](int kind,int parameter,float value){
+   VoiceDSP voice;voice.prepare(48000.0);voice.rng.setSeed(0x12345678);
+   voice.tune=.2f;voice.decay=.35f;voice.tone=.25f;voice.character=.2f;
+   if(parameter==0)voice.tune=value;else if(parameter==1)voice.decay=value;else if(parameter==2)voice.tone=value;else voice.character=value;
+   voice.trigger(.8f,kind);double sum=0.0;
+   for(int i=0;i<4096;i++){const float x=voice.process();sum+=std::abs(x);}
+   return sum;
+  };
+  for(int kind=0;kind<4;kind++)for(int parameter=0;parameter<4;parameter++){
+   const double low=renderAnalog(kind,parameter,.2f),high=renderAnalog(kind,parameter,.8f);
+   if(std::abs(low-high)<.01){log("FAIL: analog control does not change rendered voice "+std::to_string(kind)+" parameter "+std::to_string(parameter));return 8;}
+  }
+  log("SMOKE: all kick/snare/tom/hat controls change rendered audio");
   e->triggerSynthNote(69,.8f);
   if(e->getSynthMidiNote()!=69){log("FAIL: synth MIDI pitch was not applied");return 5;}
   e->pattern(0).step[11][0].note=72;e->pattern(0).step[11][0].on=true;
