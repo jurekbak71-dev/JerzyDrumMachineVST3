@@ -15,7 +15,10 @@ jobs:
    - name: Configure
      run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DJUCE_DIR="${{ github.workspace }}/JUCE"
    - name: Build
-     run: cmake --build build --config Release --target JerzyDrumMachine_VST3 JerzyDrumMachine_Standalone
+     run: cmake --build build --config Release --target JerzyDrumMachine_VST3 JerzyDrumMachine_Standalone JerzyDrumMachineTests
+   - name: DSP smoke test
+     shell: pwsh
+     run: '& "build/JerzyDrumMachineTests_artefacts/Release/Jerzy Drum Machine Tests.exe"'
    - name: Package
      shell: pwsh
      run: |
