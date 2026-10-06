@@ -43,7 +43,7 @@ struct VoiceDSP {
 class DrumEngine {
 public:
  static constexpr int voices=12,patterns=32;
- void prepare(double s){sr=s;for(auto&v:dsp)v.prepare(s);initialiseFactoryPatterns();}
+ void prepare(double s){sr=s;for(auto&v:dsp)v.prepare(s);reverb.setSampleRate(s);juce::dsp::Reverb::Parameters rp;rp.roomSize=.45f;rp.damping=.55f;rp.wetLevel=.22f;rp.dryLevel=.78f;reverb.setParameters(rp);delayL.assign((size_t)(s*2.0),0.f);delayR.assign((size_t)(s*2.0),0.f);initialiseFactoryPatterns();}
  void trigger(int i,float v){if(i>=0&&i<voices){if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){sampleVelocity[(size_t)(i-8)]=v;samples[(size_t)(i-8)].trigger();}else dsp[(size_t)i].trigger(v,i);}}
  void setPattern(int p){current=juce::jlimit(0,patterns-1,p);step=-1;samplesToStep=0;}
  int getPattern()const{return current;} int getCurrentStep()const{return step;}
@@ -60,14 +60,14 @@ public:
   for(int i=0;i<n;i++){
    if(hostPlaying&&samplesToStep<=0){advance();double d=base*((step&1)?1.0+swing:1.0-swing);samplesToStep+=juce::jmax(1.0,d);}
    samplesToStep-=1.0; float l=0,r=0;
-   for(int v=0;v<voices;v++){float raw=(v>=8&&v<=10&&samples[(size_t)(v-8)].loaded)?samples[(size_t)(v-8)].process(sr)*sampleVelocity[(size_t)(v-8)]:dsp[v].process();float x=raw*gain[v];float pan=panorama[v];l+=x*std::sqrt(.5f*(1-pan));r+=x*std::sqrt(.5f*(1+pan));}
-   l=std::tanh(l*.24f*drive);r=std::tanh(r*.24f*drive);
+   float revSendL=0,revSendR=0,delSendL=0,delSendR=0;for(int v=0;v<voices;v++){float raw=(v>=8&&v<=10&&samples[(size_t)(v-8)].loaded)?samples[(size_t)(v-8)].process(sr)*sampleVelocity[(size_t)(v-8)]:dsp[v].process();float x=raw*gain[v];float pan=panorama[v];float vl=x*std::sqrt(.5f*(1-pan)),vr=x*std::sqrt(.5f*(1+pan));l+=vl;r+=vr;revSendL+=vl*reverbSend[v];revSendR+=vr*reverbSend[v];delSendL+=vl*delaySend[v];delSendR+=vr*delaySend[v];}
+   float wetL=revSendL,wetR=revSendR;reverb.processStereo(&wetL,&wetR,1);if(!delayL.empty()){size_t read=(delayPos+delayL.size()-(size_t)juce::jlimit(1.0,sr*1.9,sr*60.0/bpm*.75))%delayL.size();float dl=delayL[read],dr=delayR[read];delayL[delayPos]=delSendL+dr*.36f;delayR[delayPos]=delSendR+dl*.36f;delayPos=(delayPos+1)%delayL.size();l+=dl*.45f;r+=dr*.45f;}l+=wetL;r+=wetR;l=std::tanh(l*.24f*drive);r=std::tanh(r*.24f*drive);float mono=.5f*(l+r);float low=masterLow.process(mono);float high=mono-low;float eq=low*masterBass+high*masterTreble;float comp=std::tanh(eq*masterComp)/(std::tanh(masterComp)+1.0e-6f);l=.72f*l+.28f*comp;r=.72f*r+.28f*comp;
    if(out.getNumChannels()>0)out.setSample(0,i,l);if(out.getNumChannels()>1)out.setSample(1,i,r);
   }
  }
- float drive=1.15f; std::array<float,voices> gain{1,1,1,1,1,1,1,1,1,1,1,1},panorama{};
+ float drive=1.15f,masterBass=1.0f,masterTreble=1.0f,masterComp=1.35f; std::array<float,voices> gain{1,1,1,1,1,1,1,1,1,1,1,1},panorama{},reverbSend{.08f,.12f,.08f,.16f,.12f,.12f,.14f,.18f,.10f,.10f,.10f,.15f},delaySend{0,0,0,.05f,.08f,.08f,.10f,.12f,.08f,.08f,.08f,.12f};
 private:
  void advance(){auto&p=pattern(current);step=(step+1)%juce::jmax(1,p.length);for(int v=0;v<voices;v++){auto&st=p.step[v][step];if(st.on&&random.nextFloat()<=st.probability){int reps=juce::jlimit(1,4,st.ratchet);trigger(v,juce::jlimit(0.f,1.f,st.velocity*(st.accent?1.18f:1.f)));(void)reps;}}}
  void initialiseFactoryPatterns(){for(int q=0;q<patterns;q++){auto&p=pats[q];p.length=16;for(int s=0;s<16;s++){p.step[0][s].on=s%4==0;p.step[1][s].on=s==4||s==12;p.step[3][s].on=s%2==0;p.step[4][s].on=(q%2)&&s%4==2;p.step[7][s].on=(q%3==2)&&(s==7||s==15);}}}
- double sr=44100,bpm=120,samplesToStep=0;float swing=0;bool hostPlaying=false;int current=0,step=-1;juce::Random random;std::array<VoiceDSP,voices>dsp{};std::array<SampleSlot,3>samples{};std::array<float,3>sampleVelocity{1,1,1};std::array<juce::String,3>sampleNames{};std::array<Pattern,patterns>pats{};
+ double sr=44100,bpm=120,samplesToStep=0;float swing=0;bool hostPlaying=false;juce::dsp::Reverb reverb;std::vector<float>delayL,delayR;size_t delayPos=0;struct OnePole{float z=0;float process(float x){z+=.08f*(x-z);return z;}}masterLow;int current=0,step=-1;juce::Random random;std::array<VoiceDSP,voices>dsp{};std::array<SampleSlot,3>samples{};std::array<float,3>sampleVelocity{1,1,1};std::array<juce::String,3>sampleNames{};std::array<Pattern,patterns>pats{};
 };
