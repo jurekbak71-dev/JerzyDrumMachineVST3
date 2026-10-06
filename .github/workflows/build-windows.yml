@@ -22,21 +22,16 @@ jobs:
      run: cmake --build build --config Release --target JerzyDrumMachine_VST3 JerzyDrumMachine_Standalone
    - name: Build DSP smoke test
      id: smoke_build
-     continue-on-error: true
      run: cmake --build build --config Release --target JerzyDrumMachineTests
    - name: Run DSP smoke test
-     if: steps.smoke_build.outcome == 'success'
-     continue-on-error: true
      shell: pwsh
      run: '& "build/JerzyDrumMachineTests_artefacts/Release/JerzyDrumMachineTests.exe"'
    - name: Package
-     if: steps.production_build.outcome == 'success'
      shell: pwsh
      run: |
       Compress-Archive -Path "build/JerzyDrumMachine_artefacts/Release/VST3/Jerzy Drum Machine.vst3" -DestinationPath "JerzyDrumMachine-VST3-Windows-x64.zip"
       Compress-Archive -Path "build/JerzyDrumMachine_artefacts/Release/Standalone/Jerzy Drum Machine.exe" -DestinationPath "JerzyDrumMachine-Standalone-Windows-x64.zip"
    - uses: actions/upload-artifact@v4
-     if: steps.production_build.outcome == 'success'
      with:
       name: JerzyDrumMachine-Windows-x64
       path: |
