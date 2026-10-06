@@ -23,13 +23,17 @@ int main(){
   for(int ch=0;ch<2;ch++)for(int i=0;i<b.getNumSamples();i++){auto x=b.getSample(ch,i);if(!std::isfinite(x)){log("FAIL: non-finite audio");return 4;}energy+=std::abs(x);}
   log(std::string("SMOKE: energy=")+std::to_string(energy));
   if(!(energy>1.0)){log("FAIL: engine produced silence");return 2;}
+  e->triggerSynthNote(69,.8f);
+  if(e->dsp[11].midiNote!=69){log("FAIL: synth MIDI pitch was not applied");return 5;}
+  e->pattern(0).step[11][0].note=72;e->pattern(0).step[11][0].on=true;
   e->gain[0]=0.42f;e->panorama[0]=-0.25f;
   auto state=e->saveState();
   log("SMOKE: state saved");
   auto copy=std::make_unique<DrumEngine>();copy->prepare(48000.0);copy->loadState(state);
   log("SMOKE: state restored");
   if(std::abs(copy->gain[0]-0.42f)>.001f||std::abs(copy->panorama[0]+0.25f)>.001f){log("FAIL: state restore mismatch");return 3;}
-  log("PASS: audio and state smoke test");
+  if(copy->pattern(0).step[11][0].note!=72){log("FAIL: synth step note did not survive state restore");return 6;}
+  log("PASS: audio, synth MIDI pitch and state smoke test");
   return 0;
  }catch(const std::exception&e){log(std::string("FAIL exception: ")+e.what());return 10;}
  catch(...){log("FAIL unknown exception");return 11;}

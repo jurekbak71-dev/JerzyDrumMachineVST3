@@ -66,7 +66,7 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  engine.setReverb(param("rev_size"),param("rev_damp"));engine.setDelay(param("delay_beats"),param("delay_fb"),param("delay_mix"));engine.setMaster(param("master_bass"),param("master_treble"),param("master_comp"));
  double bpm=120; bool playing=true; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
  engine.setHost(bpm,playing);
- for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOn()){int note=msg.getNoteNumber();if(note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else if(note>=60&&note<92)engine.requestPattern(note-60);}}
+ for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOn()){int note=msg.getNoteNumber();if(msg.getChannel()==2)engine.triggerSynthNote(note,msg.getFloatVelocity());else if(note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else if(note>=48&&note<60)engine.triggerSynthNote(note+12,msg.getFloatVelocity());else if(note>=60&&note<92)engine.requestPattern(note-60);}}
  auto master=getBusBuffer(b,false,0);
  std::array<juce::AudioBuffer<float>,DrumEngine::voices> stemViews;
  std::array<juce::AudioBuffer<float>*,DrumEngine::voices> stems{};

@@ -70,14 +70,14 @@ private:
  JerzyDrumMachineAudioProcessor&p; CopperLookAndFeel copper; int page=0,selected=0;
  juce::TextButton seq{"SEQ"},sound{"SOUND"},mix{"MIX"},drummer{"DRUMMER"},run{"RUN"},generate{"GENERATE"},mutate{"MUTATE"},fill{"FILL"};
  std::array<juce::TextButton,12> instruments; std::array<bool,12> instrumentHover{}; std::array<juce::TextButton,16> steps; std::array<juce::TextButton,4> banks;
- juce::TextButton loadSample{"LOAD WAV"}; std::unique_ptr<juce::FileChooser> chooser;
+ juce::TextButton loadSample{"LOAD WAV"}; std::unique_ptr<juce::FileChooser> chooser; juce::ToggleButton showSynthKeyboard{"SHOW MIDI KEYBOARD"}; std::array<juce::TextButton,12> synthKeys;
  std::array<juce::Slider,12> channelGain,channelPan,channelFilter,channelDrive,revSend,delSend; std::array<juce::TextButton,12> channelMute,channelSolo; juce::Slider masterDrive; std::array<juce::Slider,8> fxParam;
  using SliderAttachment=juce::AudioProcessorValueTreeState::SliderAttachment; using ButtonAttachment=juce::AudioProcessorValueTreeState::ButtonAttachment;
  std::array<std::unique_ptr<SliderAttachment>,12> gainAtt,panAtt,filterAtt,driveAtt,revAtt,delAtt; std::array<std::unique_ptr<ButtonAttachment>,12> muteAtt,soloAtt;
  std::array<std::unique_ptr<SliderAttachment>,4> soundAtt; std::array<std::unique_ptr<SliderAttachment>,8> fxAtt; std::unique_ptr<SliderAttachment> masterDriveAtt;
  std::array<juce::Slider,4> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet;
  juce::ToggleButton stepAccent{"ACCENT"},stepFlam{"FLAM"}; juce::Slider patternLength,stepMicro;
- juce::ComboBox patternSelect,changeMode; std::array<juce::Slider,8> genParam;
+ juce::ComboBox patternSelect,changeMode,stepNote; std::array<juce::Slider,8> genParam;
  juce::ToggleButton drummerEnable{"AUTO DRUMMER"}; std::array<juce::Slider,3> drummerParam; juce::ComboBox drummerStyle,hatDivision,phraseLength;
  juce::TextButton saveKit{"SAVE KIT"},loadKit{"LOAD KIT"}; std::unique_ptr<juce::FileChooser> kitChooser;
  int bank=0,selectedStep=0;
