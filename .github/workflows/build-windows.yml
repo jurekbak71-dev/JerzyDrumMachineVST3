@@ -6,8 +6,14 @@ jobs:
   steps:
    - uses: actions/checkout@v4
    - uses: lukka/get-cmake@latest
+   - name: Checkout JUCE
+     uses: actions/checkout@v4
+     with:
+      repository: juce-framework/JUCE
+      ref: 8.0.4
+      path: JUCE
    - name: Configure
-     run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+     run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DJUCE_DIR="${{ github.workspace }}/JUCE"
    - name: Build
      run: cmake --build build --config Release --target JerzyDrumMachine_VST3 JerzyDrumMachine_Standalone
    - name: Package
