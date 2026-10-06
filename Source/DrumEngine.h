@@ -79,7 +79,89 @@ public:
  void setVoiceParam(int i,int param,float value){if(i<0||i>=voices)return;value=juce::jlimit(0.0f,1.0f,value);auto&v=dsp[(size_t)i];if(param==0)v.tune=value;else if(param==1)v.decay=value;else if(param==2)v.tone=value;else if(param==3)v.character=value;if(i>=8&&i<=10){auto&s=samples[(size_t)(i-8)];if(param==0)s.pitch=juce::jmap(value,0.0f,1.0f,.5f,2.0f);else if(param==3)s.reverse=value>.75f;}}
  float getVoiceParam(int i,int param)const{if(i<0||i>=voices)return .5f;auto const&v=dsp[(size_t)i];return param==0?v.tune:param==1?v.decay:param==2?v.tone:v.character;}
  juce::ValueTree saveState()const{juce::ValueTree root("ENGINE");root.setProperty("pattern",current,nullptr);root.setProperty("changeMode",(int)changeMode,nullptr);root.setProperty("masterBass",masterBass,nullptr);root.setProperty("masterTreble",masterTreble,nullptr);root.setProperty("masterComp",masterComp,nullptr);root.setProperty("reverbSize",reverbSize,nullptr);root.setProperty("reverbDamping",reverbDamping,nullptr);root.setProperty("delayBeats",delayBeats,nullptr);root.setProperty("delayFeedback",delayFeedback,nullptr);root.setProperty("delayMix",delayMix,nullptr);for(int v=0;v<voices;v++){juce::ValueTree voice("VOICE");voice.setProperty("index",v,nullptr);if(v>=8&&v<=10)voice.setProperty("samplePath",samples[(size_t)(v-8)].sourcePath,nullptr);voice.setProperty("gain",gain[v],nullptr);voice.setProperty("pan",panorama[v],nullptr);voice.setProperty("rev",reverbSend[v],nullptr);voice.setProperty("del",delaySend[v],nullptr);voice.setProperty("filter",channelFilter[v],nullptr);voice.setProperty("drive",channelDrive[v],nullptr);voice.setProperty("mute",mute[v],nullptr);voice.setProperty("solo",solo[v],nullptr);voice.setProperty("tune",dsp[v].tune,nullptr);voice.setProperty("decay",dsp[v].decay,nullptr);voice.setProperty("tone",dsp[v].tone,nullptr);voice.setProperty("char",dsp[v].character,nullptr);root.addChild(voice,-1,nullptr);}for(int pidx=0;pidx<patterns;pidx++){juce::ValueTree pat("PATTERN");pat.setProperty("index",pidx,nullptr);pat.setProperty("length",pats[pidx].length,nullptr);for(int v=0;v<voices;v++)for(int s=0;s<64;s++){auto const&st=pats[pidx].step[v][s];if(st.on||st.velocity!=.85f||st.probability!=1.f||st.ratchet!=1||st.micro!=0.f||st.accent||st.flam||st.note!=60){juce::ValueTree n("STEP");n.setProperty("v",v,nullptr);n.setProperty("s",s,nullptr);n.setProperty("on",st.on,nullptr);n.setProperty("vel",st.velocity,nullptr);n.setProperty("prob",st.probability,nullptr);n.setProperty("rat",st.ratchet,nullptr);n.setProperty("micro",st.micro,nullptr);n.setProperty("accent",st.accent,nullptr);n.setProperty("flam",st.flam,nullptr);n.setProperty("note",st.note,nullptr);pat.addChild(n,-1,nullptr);}}root.addChild(pat,-1,nullptr);}juce::ValueTree song("SONG");song.setProperty("length",songLength,nullptr);for(int i=0;i<songLength;i++){juce::ValueTree entry("ENTRY");entry.setProperty("pattern",songChain[(size_t)i].pattern,nullptr);entry.setProperty("section",songChain[(size_t)i].section,nullptr);song.addChild(entry,-1,nullptr);}root.addChild(song,-1,nullptr);return root;}
- void loadState(const juce::ValueTree&root){if(!root.isValid())return;current=(int)root.getProperty("pattern",0);changeMode=(ChangeMode)(int)root.getProperty("changeMode",(int)ChangeMode::EndPattern);masterBass=(float)root.getProperty("masterBass",1.0);masterTreble=(float)root.getProperty("masterTreble",1.0);masterComp=(float)root.getProperty("masterComp",1.35);reverbSize=(float)root.getProperty("reverbSize",.45);reverbDamping=(float)root.getProperty("reverbDamping",.55);delayBeats=(float)root.getProperty("delayBeats",.75);delayFeedback=(float)root.getProperty("delayFeedback",.36);delayMix=(float)root.getProperty("delayMix",.45);setReverb(reverbSize,reverbDamping);songLength=0;activeSongLength.store(0,std::memory_order_relaxed);songPosition.store(0,std::memory_order_relaxed);songPlaying=false;for(auto child:root){if(child.hasType("VOICE")){int v=(int)child.getProperty("index",-1);if(v>=0&&v<voices){gain[v]=(float)child.getProperty("gain",1.0);panorama[v]=(float)child.getProperty("pan",0.0);reverbSend[v]=(float)child.getProperty("rev",0.1);delaySend[v]=(float)child.getProperty("del",0.0);channelFilter[v]=(float)child.getProperty("filter",0.0);channelDrive[v]=(float)child.getProperty("drive",0.0);mute[v]=(bool)child.getProperty("mute",false);solo[v]=(bool)child.getProperty("solo",false);dsp[v].tune=(float)child.getProperty("tune",.5);dsp[v].decay=(float)child.getProperty("decay",.5);dsp[v].tone=(float)child.getProperty("tone",.5);dsp[v].character=(float)child.getProperty("char",.5);if(v>=8&&v<=10){auto path=child.getProperty("samplePath").toString();if(path.isNotEmpty()){juce::File file(path);if(file.existsAsFile())loadSample(v-8,file);}}}}else if(child.hasType("PATTERN")){int pidx=(int)child.getProperty("index",-1);if(pidx>=0&&pidx<patterns){pats[pidx]=Pattern{};pats[pidx].length=juce::jlimit(1,64,(int)child.getProperty("length",16));for(auto n:child){if(!n.hasType("STEP"))continue;int v=(int)n.getProperty("v",-1),s=(int)n.getProperty("s",-1);if(v<0||v>=voices||s<0||s>=64)continue;auto&st=pats[pidx].step[v][s];st.on=(bool)n.getProperty("on",false);st.velocity=(float)n.getProperty("vel",.85);st.probability=(float)n.getProperty("prob",1.0);st.ratchet=(int)n.getProperty("rat",1);st.micro=(float)n.getProperty("micro",0.0);st.accent=(bool)n.getProperty("accent",false);st.flam=(bool)n.getProperty("flam",false);st.note=(int)n.getProperty("note",60);}}}else if(child.hasType("SONG")){songLength=0;songPlaying=false;songPosition.store(0,std::memory_order_relaxed);activeSongLength.store(0,std::memory_order_relaxed);for(auto entry:child){if(!entry.hasType("ENTRY")||songLength>=maxSongEntries)continue;const int index=songLength++;songChain[(size_t)index]={(int)entry.getProperty("pattern",0),(int)entry.getProperty("section",0)};audioSongPattern[(size_t)index].store(songChain[(size_t)index].pattern,std::memory_order_relaxed);activeSongLength.store(songLength,std::memory_order_relaxed);}}}
+ void loadState(const juce::ValueTree& root)
+ {
+  if(!root.isValid())return;
+  current=(int)root.getProperty("pattern",0);
+  changeMode=(ChangeMode)(int)root.getProperty("changeMode",(int)ChangeMode::EndPattern);
+  masterBass=(float)root.getProperty("masterBass",1.0);
+  masterTreble=(float)root.getProperty("masterTreble",1.0);
+  masterComp=(float)root.getProperty("masterComp",1.35);
+  reverbSize=(float)root.getProperty("reverbSize",.45);
+  reverbDamping=(float)root.getProperty("reverbDamping",.55);
+  delayBeats=(float)root.getProperty("delayBeats",.75);
+  delayFeedback=(float)root.getProperty("delayFeedback",.36);
+  delayMix=(float)root.getProperty("delayMix",.45);
+  setReverb(reverbSize,reverbDamping);
+
+  songLength=0;
+  activeSongLength.store(0,std::memory_order_relaxed);
+  songPosition.store(0,std::memory_order_relaxed);
+  songPlaying=false;
+
+  for(auto child:root)
+  {
+   if(child.hasType("VOICE"))
+   {
+    const int v=(int)child.getProperty("index",-1);
+    if(v<0||v>=voices)continue;
+    gain[v]=(float)child.getProperty("gain",1.0);
+    panorama[v]=(float)child.getProperty("pan",0.0);
+    reverbSend[v]=(float)child.getProperty("rev",0.1);
+    delaySend[v]=(float)child.getProperty("del",0.0);
+    channelFilter[v]=(float)child.getProperty("filter",0.0);
+    channelDrive[v]=(float)child.getProperty("drive",0.0);
+    mute[v]=(bool)child.getProperty("mute",false);
+    solo[v]=(bool)child.getProperty("solo",false);
+    dsp[v].tune=(float)child.getProperty("tune",.5);
+    dsp[v].decay=(float)child.getProperty("decay",.5);
+    dsp[v].tone=(float)child.getProperty("tone",.5);
+    dsp[v].character=(float)child.getProperty("char",.5);
+    if(v>=8&&v<=10)
+    {
+     auto path=child.getProperty("samplePath").toString();
+     if(path.isNotEmpty())
+     {
+      juce::File file(path);
+      if(file.existsAsFile())loadSample(v-8,file);
+     }
+    }
+   }
+   else if(child.hasType("PATTERN"))
+   {
+    const int pidx=(int)child.getProperty("index",-1);
+    if(pidx<0||pidx>=patterns)continue;
+    pats[pidx]=Pattern{};
+    pats[pidx].length=juce::jlimit(1,64,(int)child.getProperty("length",16));
+    for(auto n:child)
+    {
+     if(!n.hasType("STEP"))continue;
+     const int v=(int)n.getProperty("v",-1),s=(int)n.getProperty("s",-1);
+     if(v<0||v>=voices||s<0||s>=64)continue;
+     auto& st=pats[pidx].step[v][s];
+     st.on=(bool)n.getProperty("on",false);
+     st.velocity=(float)n.getProperty("vel",.85);
+     st.probability=(float)n.getProperty("prob",1.0);
+     st.ratchet=(int)n.getProperty("rat",1);
+     st.micro=(float)n.getProperty("micro",0.0);
+     st.accent=(bool)n.getProperty("accent",false);
+     st.flam=(bool)n.getProperty("flam",false);
+     st.note=(int)n.getProperty("note",60);
+    }
+   }
+   else if(child.hasType("SONG"))
+   {
+    for(auto entry:child)
+    {
+     if(!entry.hasType("ENTRY")||songLength>=maxSongEntries)continue;
+     const int index=songLength++;
+     songChain[(size_t)index]={(int)entry.getProperty("pattern",0),(int)entry.getProperty("section",0)};
+     audioSongPattern[(size_t)index].store(songChain[(size_t)index].pattern,std::memory_order_relaxed);
+     activeSongLength.store(songLength,std::memory_order_relaxed);
+    }
+   }
+  }
+ }
  bool loadSample(int slot,const juce::File& file){if(slot<0||slot>=3)return false;juce::AudioFormatManager fm;fm.registerBasicFormats();std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(file));if(!r)return false;auto&ss=samples[(size_t)slot];ss.audio.setSize(1,(int)r->lengthInSamples);r->read(&ss.audio,0,(int)r->lengthInSamples,0,true,false);ss.sourceRate=r->sampleRate;ss.loaded=true;ss.active=false;ss.sourcePath=file.getFullPathName();sampleNames[(size_t)slot]=file.getFileName();return true;}
  juce::String getSampleName(int slot)const{return slot>=0&&slot<3?sampleNames[(size_t)slot]:juce::String();}
  void setGenerator(float complexityIn,float syncopationIn,float humanizeIn,float chaosIn,float kickStableIn,float snareStableIn,float hatActivityIn,float percActivityIn){complexity=complexityIn;syncopation=syncopationIn;humanize=humanizeIn;chaos=chaosIn;kickStability=kickStableIn;snareStability=snareStableIn;hatActivity=hatActivityIn;percActivity=percActivityIn;}
