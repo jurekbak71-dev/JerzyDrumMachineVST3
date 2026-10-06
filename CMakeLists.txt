@@ -10,3 +10,9 @@ target_sources(JerzyDrumMachine PRIVATE Source/PluginProcessor.cpp Source/Plugin
 juce_generate_juce_header(JerzyDrumMachine)
 target_compile_definitions(JerzyDrumMachine PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(JerzyDrumMachine PRIVATE juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+
+juce_add_console_app(JerzyDrumMachineTests PRODUCT_NAME "Jerzy Drum Machine Tests")
+target_sources(JerzyDrumMachineTests PRIVATE Source/EngineSmoke.cpp Source/DrumEngine.h)
+juce_generate_juce_header(JerzyDrumMachineTests)
+target_compile_definitions(JerzyDrumMachineTests PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+target_link_libraries(JerzyDrumMachineTests PRIVATE juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
