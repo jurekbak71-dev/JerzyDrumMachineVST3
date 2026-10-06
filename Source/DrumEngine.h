@@ -10,32 +10,33 @@ struct Pattern { std::array<std::array<PatternStep,64>,12> step{}; int length=16
 struct SampleSlot { juce::AudioBuffer<float> audio; double sourceRate=44100.0,pos=0.0; bool loaded=false,active=false,reverse=false; float pitch=1.0f,level=1.0f; void trigger(){if(loaded){active=true;pos=reverse?(double)audio.getNumSamples()-1.0:0.0;}} float process(double outRate){if(!loaded||!active||audio.getNumSamples()<2)return 0;int i=juce::jlimit(0,audio.getNumSamples()-2,(int)pos);float frac=(float)(pos-i);float x=audio.getSample(0,i)*(1-frac)+audio.getSample(0,i+1)*frac;double inc=(sourceRate/outRate)*pitch*(reverse?-1.0:1.0);pos+=inc;if(pos<0||pos>=audio.getNumSamples()-1)active=false;return x*level;} };
 
 struct VoiceDSP {
- double sr=44100.0, phase=0, phase2=0; float env=0, noiseEnv=0, velocity=0; int kind=0; juce::Random rng;
+ double sr=44100.0, phase=0, phase2=0; float env=0, noiseEnv=0, velocity=0; int kind=0; float tune=0.5f,decay=0.5f,tone=0.5f,character=0.5f; juce::Random rng;
  void prepare(double s){sr=s;}
  void trigger(float v,int k){kind=k;velocity=v;env=v;noiseEnv=v;phase=phase2=0;}
  float process(){
   if(env<1.0e-5f && noiseEnv<1.0e-5f)return 0.0f;
   const float n=rng.nextFloat()*2.0f-1.0f; double f=80.0;
+  float tuneMul=std::pow(2.0f,(tune-.5f)*2.0f);
   switch(kind){
    case 0:f=48.0+120.0*env;break; case 1:f=185.0;break; case 2:f=95.0;break; case 3:f=420.0;break;
    case 4:f=155.0;break; case 5:f=240.0;break; case 6:f=330.0;break; case 7:f=520.0;break;
    case 8:f=105.0;break; case 9:f=175.0;break; case 10:f=260.0;break; default:f=72.0;break;
   }
-  phase+=juce::MathConstants<double>::twoPi*f/sr; phase2+=juce::MathConstants<double>::twoPi*f*(kind>=4&&kind<=7?1.414:2.01)/sr;
+  f*=tuneMul; phase+=juce::MathConstants<double>::twoPi*f/sr; phase2+=juce::MathConstants<double>::twoPi*f*(kind>=4&&kind<=7?(1.05+character*1.2):1.4+character*1.2)/sr;
   if(phase>juce::MathConstants<double>::twoPi)phase-=juce::MathConstants<double>::twoPi;
   if(phase2>juce::MathConstants<double>::twoPi)phase2-=juce::MathConstants<double>::twoPi;
   float a=(float)std::sin(phase),b=(float)std::sin(phase2),x=0;
   if(kind==0)x=a*0.98f;
-  else if(kind==1)x=a*.32f+n*noiseEnv*.78f;
+  else if(kind==1)x=a*(.15f+tone*.35f)+n*noiseEnv*(.95f-tone*.55f);
   else if(kind==2)x=(a>0?1.f:-1.f)*.65f+a*.35f;
-  else if(kind==3)x=n*.65f+(a*b)*.45f;
-  else if(kind==4)x=std::sin((float)phase+b*3.5f);
-  else if(kind==5)x=std::tanh((a+b*.8f)*2.2f);
+  else if(kind==3)x=n*(.35f+tone*.5f)+(a*b)*(.25f+character*.5f);
+  else if(kind==4)x=std::sin((float)phase+b*(1.0f+character*7.0f));
+  else if(kind==5)x=std::tanh((a+b*(.2f+tone))* (1.2f+character*3.0f));
   else if(kind==6)x=(a*.45f+b*.35f+n*.20f);
   else if(kind==7)x=n*.55f+std::sin((float)phase+n*.9f)*.45f;
   else if(kind>=8&&kind<=10)x=(a*.55f+n*.45f); // sample slots have distinct fallback synthesis until a WAV is loaded
   else x=a*.7f+b*.3f;
-  env*= kind==0?.9988f:(kind==3?.985f:(kind==11?.9992f:.9945f)); noiseEnv*=.982f;
+  float d=juce::jmap(decay,0.0f,1.0f,0.965f,0.99975f); env*= kind==3?juce::jmin(d,.992f):d; noiseEnv*=juce::jmap(decay,0.0f,1.0f,.94f,.995f);
   return std::tanh(x*velocity*1.65f);
  }
 };
@@ -50,6 +51,8 @@ public:
  Pattern& pattern(int p){return pats[(size_t)juce::jlimit(0,patterns-1,p)];}
  void setHost(double b,bool play){bpm=b>20?b:120;hostPlaying=play;}
  void setSwing(float s){swing=juce::jlimit(0.0f,.75f,s);}
+ void setVoiceParam(int i,int param,float value){if(i<0||i>=voices)return;value=juce::jlimit(0.0f,1.0f,value);auto&v=dsp[(size_t)i];if(param==0)v.tune=value;else if(param==1)v.decay=value;else if(param==2)v.tone=value;else if(param==3)v.character=value;if(i>=8&&i<=10){auto&s=samples[(size_t)(i-8)];if(param==0)s.pitch=juce::jmap(value,0.0f,1.0f,.5f,2.0f);else if(param==3)s.reverse=value>.75f;}}
+ float getVoiceParam(int i,int param)const{if(i<0||i>=voices)return .5f;auto const&v=dsp[(size_t)i];return param==0?v.tune:param==1?v.decay:param==2?v.tone:v.character;}
  bool loadSample(int slot,const juce::File& file){if(slot<0||slot>=3)return false;juce::AudioFormatManager fm;fm.registerBasicFormats();std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(file));if(!r)return false;auto&ss=samples[(size_t)slot];ss.audio.setSize(1,(int)r->lengthInSamples);r->read(&ss.audio,0,(int)r->lengthInSamples,0,true,false);ss.sourceRate=r->sampleRate;ss.loaded=true;ss.active=false;sampleNames[(size_t)slot]=file.getFileName();return true;}
  juce::String getSampleName(int slot)const{return slot>=0&&slot<3?sampleNames[(size_t)slot]:juce::String();}
  void generate(float density,float variation){auto&p=pattern(current);for(int v=0;v<voices;v++)for(int s=0;s<p.length;s++){float role=v==0?(s%4==0?.85f:.15f):v==1?((s==4||s==12)?.9f:.08f):v==3?.55f:.22f;float chance=juce::jlimit(0.f,1.f,role*density+(random.nextFloat()-.5f)*variation);p.step[v][s].on=random.nextFloat()<chance;p.step[v][s].velocity=.55f+random.nextFloat()*.45f;p.step[v][s].probability=.72f+random.nextFloat()*.28f;}}
