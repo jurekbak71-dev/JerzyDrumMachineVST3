@@ -31,7 +31,7 @@ public:
   g.drawRoundedRectangle(r,4.0f,on?1.8f:1.0f);
   if(on){g.setColour(juce::Colour(0x44ffb34c));g.drawRoundedRectangle(r.reduced(2),3.0f,2.0f);}
  }
- void drawRotarySlider(juce::Graphics& g,int x,int y,int w,int h,float pos,float start,float end,juce::Slider&) override {
+ void drawRotarySlider(juce::Graphics& g,int x,int y,int w,int h,float pos,float start,float end,juce::Slider& s) override {
   auto b=juce::Rectangle<float>((float)x,(float)y,(float)w,(float)h).reduced(8);
   float d=juce::jmin(b.getWidth(),b.getHeight());auto c=b.getCentre();juce::Rectangle<float> k(c.x-d*.5f,c.y-d*.5f,d,d);
   g.setColour(juce::Colour(0xff080706));g.fillEllipse(k.translated(2,3));
