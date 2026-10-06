@@ -1,7 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 JerzyDrumMachineAudioProcessor::JerzyDrumMachineAudioProcessor():AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)),apvts(*this,nullptr,"STATE",layout()){}
-auto JerzyDrumMachineAudioProcessor::layout()->juce::AudioProcessorValueTreeState::ParameterLayout{
+juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcessor::layout(){
  std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
  p.push_back(std::make_unique<juce::AudioParameterFloat>("drive","Master Drive",juce::NormalisableRange<float>(0.5f,3.0f),1.15f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("swing","Swing",0.0f,0.75f,0.0f));
