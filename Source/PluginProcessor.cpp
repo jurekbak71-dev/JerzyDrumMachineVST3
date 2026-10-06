@@ -1,6 +1,13 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-JerzyDrumMachineAudioProcessor::JerzyDrumMachineAudioProcessor():AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)),apvts(*this,nullptr,"STATE",layout()){}
+static juce::AudioProcessor::BusesProperties makeOutputBuses(){
+ juce::AudioProcessor::BusesProperties b;
+ b=b.withOutput("Master",juce::AudioChannelSet::stereo(),true);
+ static const char* n[]={"Kick","Snare","Tom","Metal Hat","FM Perc","Phase Perc","Wave Metal","Noise Reso","Sample 1","Sample 2","Sample 3","Synth"};
+ for(auto* name:n)b=b.withOutput(name,juce::AudioChannelSet::stereo(),false);
+ return b;
+}
+JerzyDrumMachineAudioProcessor::JerzyDrumMachineAudioProcessor():AudioProcessor(makeOutputBuses()),apvts(*this,nullptr,"STATE",layout()){}
 juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcessor::layout(){
  std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
  p.push_back(std::make_unique<juce::AudioParameterFloat>("drive","Master Drive",juce::NormalisableRange<float>(0.5f,3.0f),1.15f));
@@ -34,7 +41,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
  return {p.begin(),p.end()};
 }
 void JerzyDrumMachineAudioProcessor::prepareToPlay(double s,int){engine.prepare(s);}
-bool JerzyDrumMachineAudioProcessor::isBusesLayoutSupported(const BusesLayout&l)const{return l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
+bool JerzyDrumMachineAudioProcessor::isBusesLayoutSupported(const BusesLayout&l)const{
+ if(l.getMainOutputChannelSet()!=juce::AudioChannelSet::stereo())return false;
+ for(auto const& bus:l.outputBuses)if(!bus.isDisabled()&&bus!=juce::AudioChannelSet::stereo())return false;
+ return true;
+}
 void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juce::MidiBuffer&m){
  juce::ScopedNoDenormals no;
  auto param=[this](const juce::String&id){if(auto*v=apvts.getRawParameterValue(id))return v->load();return 0.0f;};
@@ -48,7 +59,11 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  double bpm=120; bool playing=true; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
  engine.setHost(bpm,playing);
  for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOn()){int note=msg.getNoteNumber();if(note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else if(note>=60&&note<92)engine.requestPattern(note-60);}}
- engine.process(b); m.clear();
+ auto master=getBusBuffer(b,false,0);
+ std::array<juce::AudioBuffer<float>,DrumEngine::voices> stemViews;
+ std::array<juce::AudioBuffer<float>*,DrumEngine::voices> stems{};
+ for(int i=0;i<DrumEngine::voices;i++){stemViews[(size_t)i]=getBusBuffer(b,false,i+1);stems[(size_t)i]=&stemViews[(size_t)i];}
+ engine.process(master,&stems); m.clear();
 }
 void JerzyDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock&d){auto state=apvts.copyState();state.addChild(engine.saveState(),-1,nullptr);auto xml=state.createXml();copyXmlToBinary(*xml,d);}
 void JerzyDrumMachineAudioProcessor::setStateInformation(const void*d,int n){if(auto x=getXmlFromBinary(d,n)){auto state=juce::ValueTree::fromXml(*x);if(auto eng=state.getChildWithName("ENGINE");eng.isValid())engine.loadState(eng);apvts.replaceState(state);}}
