@@ -1,12 +1,12 @@
 #include "PluginEditor.h"
-static const char* names[]={"KICK","SNARE","CLAP","ANALOG HAT","TOM","PERC","DIGITAL 1","DIGITAL 2","DIGITAL 3","SAMPLE 1","SAMPLE 2","SYNTH"};
+static const char* names[]={"KICK","SNARE","TOM","METAL HAT","FM PERC","PHASE PERC","WAVE METAL","NOISE RESO","SAMPLE 1","SAMPLE 2","SAMPLE 3","SYNTH"};
 JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(JerzyDrumMachineAudioProcessor&x):AudioProcessorEditor(&x),p(x){
  setSize(1280,720);setResizable(true,true);setResizeLimits(960,540,1920,1080);
  for(auto*b:{&seq,&sound,&mix,&generate,&mutate,&fill})addAndMakeVisible(*b);
- seq.onClick=[this]{page=0;repaint();};sound.onClick=[this]{page=1;repaint();};mix.onClick=[this]{page=2;repaint();};
+ seq.onClick=[this]{page=0;resized();repaint();};sound.onClick=[this]{page=1;resized();repaint();};mix.onClick=[this]{page=2;resized();repaint();};
  for(int i=0;i<12;i++){instruments[i].setButtonText(names[i]);addAndMakeVisible(instruments[i]);instruments[i].onClick=[this,i]{selected=i;repaint();};}
- for(int s=0;s<16;s++){steps[s].setButtonText(juce::String(s+1));addAndMakeVisible(steps[s]);steps[s].onClick=[this,s]{auto&st=p.engine.pattern(p.engine.getPattern()).step[selected][s];st.on=!st.on;};}
- startTimerHz(20);
+ for(int s=0;s<16;s++){steps[s].setButtonText(juce::String(s+1));addAndMakeVisible(steps[s]);steps[s].onClick=[this,s]{auto&st=p.engine.pattern(p.engine.getPattern()).step[selected][s];st.on=!st.on;steps[s].setToggleState(st.on,juce::dontSendNotification);};}
+ generate.onClick=[this]{p.engine.generate(p.apvts.getRawParameterValue("density")->load(),p.apvts.getRawParameterValue("variation")->load());repaint();};\n mutate.onClick=[this]{p.engine.mutate(p.apvts.getRawParameterValue("variation")->load());repaint();};\n fill.onClick=[this]{p.engine.fill();repaint();};\n startTimerHz(20);
 }
 void JerzyDrumMachineAudioProcessorEditor::paint(juce::Graphics&g){
  g.fillAll(juce::Colour(0xff090807)); auto r=getLocalBounds().toFloat();g.setColour(juce::Colour(0xff4b2b1d));g.drawRoundedRectangle(r.reduced(6),8,2);
