@@ -24,8 +24,9 @@ int main(){
   log(std::string("SMOKE: energy=")+std::to_string(energy));
   if(!(energy>1.0)){log("FAIL: engine produced silence");return 2;}
   e->triggerSynthNote(69,.8f);
-  if(e->dsp[11].midiNote!=69){log("FAIL: synth MIDI pitch was not applied");return 5;}
+  if(e->getSynthMidiNote()!=69){log("FAIL: synth MIDI pitch was not applied");return 5;}
   e->pattern(0).step[11][0].note=72;e->pattern(0).step[11][0].on=true;
+  e->setSongEntry(0,0,0);e->setSongEntry(1,1,2);
   e->gain[0]=0.42f;e->panorama[0]=-0.25f;
   auto state=e->saveState();
   log("SMOKE: state saved");
@@ -33,6 +34,7 @@ int main(){
   log("SMOKE: state restored");
   if(std::abs(copy->gain[0]-0.42f)>.001f||std::abs(copy->panorama[0]+0.25f)>.001f){log("FAIL: state restore mismatch");return 3;}
   if(copy->pattern(0).step[11][0].note!=72){log("FAIL: synth step note did not survive state restore");return 6;}
+  if(copy->getSongLength()!=2||copy->getSongEntry(1).pattern!=1||copy->getSongEntry(1).section!=2){log("FAIL: song chain did not survive state restore");return 7;}
   log("PASS: audio, synth MIDI pitch and state smoke test");
   return 0;
  }catch(const std::exception&e){log(std::string("FAIL exception: ")+e.what());return 10;}
