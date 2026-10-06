@@ -6,7 +6,10 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  seq.onClick=[this]{page=0;resized();repaint();};sound.onClick=[this]{page=1;resized();repaint();};mix.onClick=[this]{page=2;resized();repaint();};
  for(int i=0;i<12;i++){instruments[i].setButtonText(names[i]);addAndMakeVisible(instruments[i]);instruments[i].onClick=[this,i]{selected=i;repaint();};}
  for(int s=0;s<16;s++){steps[s].setButtonText(juce::String(s+1));addAndMakeVisible(steps[s]);steps[s].onClick=[this,s]{auto&st=p.engine.pattern(p.engine.getPattern()).step[selected][s];st.on=!st.on;steps[s].setToggleState(st.on,juce::dontSendNotification);};}
- generate.onClick=[this]{p.engine.generate(p.apvts.getRawParameterValue("density")->load(),p.apvts.getRawParameterValue("variation")->load());repaint();};\n mutate.onClick=[this]{p.engine.mutate(p.apvts.getRawParameterValue("variation")->load());repaint();};\n fill.onClick=[this]{p.engine.fill();repaint();};\n startTimerHz(20);
+ generate.onClick=[this]{p.engine.generate(p.apvts.getRawParameterValue("density")->load(),p.apvts.getRawParameterValue("variation")->load());repaint();};
+ mutate.onClick=[this]{p.engine.mutate(p.apvts.getRawParameterValue("variation")->load());repaint();};
+ fill.onClick=[this]{p.engine.fill();repaint();};
+ startTimerHz(20);
 }
 void JerzyDrumMachineAudioProcessorEditor::paint(juce::Graphics&g){
  g.fillAll(juce::Colour(0xff090807)); auto r=getLocalBounds().toFloat();g.setColour(juce::Colour(0xff4b2b1d));g.drawRoundedRectangle(r.reduced(6),8,2);
