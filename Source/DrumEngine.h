@@ -4,7 +4,7 @@
 #include <cmath>
 #include <memory>
 
-struct PatternStep { bool on=false; float velocity=.85f, probability=1.0f; int ratchet=1; float micro=0.0f; bool accent=false; };
+struct PatternStep { bool on=false; float velocity=.85f, probability=1.0f; int ratchet=1; float micro=0.0f; bool accent=false,flam=false; };
 struct Pattern { std::array<std::array<PatternStep,64>,12> step{}; int length=16; };
 
 struct SampleSlot { juce::AudioBuffer<float> audio; double sourceRate=44100.0,pos=0.0; bool loaded=false,active=false,reverse=false; float pitch=1.0f,level=1.0f; void trigger(){if(loaded){active=true;pos=reverse?(double)audio.getNumSamples()-1.0:0.0;}} float process(double outRate){if(!loaded||!active||audio.getNumSamples()<2)return 0;int i=juce::jlimit(0,audio.getNumSamples()-2,(int)pos);float frac=(float)(pos-i);float x=audio.getSample(0,i)*(1-frac)+audio.getSample(0,i+1)*frac;double inc=(sourceRate/outRate)*pitch*(reverse?-1.0:1.0);pos+=inc;if(pos<0||pos>=audio.getNumSamples()-1)active=false;return x*level;} };
@@ -46,10 +46,10 @@ public:
  static constexpr int voices=12,patterns=32;
  void prepare(double s){sr=s;for(auto&v:dsp)v.prepare(s);reverb.setSampleRate(s);juce::dsp::Reverb::Parameters rp;rp.roomSize=.45f;rp.damping=.55f;rp.wetLevel=.22f;rp.dryLevel=.78f;reverb.setParameters(rp);delayL.assign((size_t)(s*2.0),0.f);delayR.assign((size_t)(s*2.0),0.f);initialiseFactoryPatterns();}
  void trigger(int i,float v){if(i>=0&&i<voices){if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){sampleVelocity[(size_t)(i-8)]=v;samples[(size_t)(i-8)].trigger();}else dsp[(size_t)i].trigger(v,i);}}
- void setPattern(int p){current=juce::jlimit(0,patterns-1,p);step=-1;samplesToStep=0;}
+ void setPattern(int p){current=juce::jlimit(0,patterns-1,p);step=-1;samplesToStep=0;hasPpq=false;}
  int getPattern()const{return current;} int getCurrentStep()const{return step;}
  Pattern& pattern(int p){return pats[(size_t)juce::jlimit(0,patterns-1,p)];}
- void setHost(double b,bool play){bpm=b>20?b:120;hostPlaying=play;}
+ void setHost(double b,bool play){bpm=b>20?b:120;hostPlaying=play;} void setHostPpq(double ppq){hostPpq=ppq;hasPpq=true;}
  void setSwing(float s){swing=juce::jlimit(0.0f,.75f,s);}
  void setVoiceParam(int i,int param,float value){if(i<0||i>=voices)return;value=juce::jlimit(0.0f,1.0f,value);auto&v=dsp[(size_t)i];if(param==0)v.tune=value;else if(param==1)v.decay=value;else if(param==2)v.tone=value;else if(param==3)v.character=value;if(i>=8&&i<=10){auto&s=samples[(size_t)(i-8)];if(param==0)s.pitch=juce::jmap(value,0.0f,1.0f,.5f,2.0f);else if(param==3)s.reverse=value>.75f;}}
  float getVoiceParam(int i,int param)const{if(i<0||i>=voices)return .5f;auto const&v=dsp[(size_t)i];return param==0?v.tune:param==1?v.decay:param==2?v.tone:v.character;}
@@ -60,7 +60,8 @@ public:
  void fill(){auto&p=pattern(current);for(int s=juce::jmax(0,p.length-4);s<p.length;s++){p.step[3][s].on=true;p.step[3][s].velocity=.65f+.1f*(s&1);p.step[4][s].on=(s&1)!=0;}}
  void process(juce::AudioBuffer<float>&out){
   out.clear(); const int n=out.getNumSamples(); const double base=sr*60.0/bpm/4.0;
-  for(int i=0;i<n;i++){
+  if(hostPlaying&&hasPpq){int target=((int)std::floor(hostPpq*4.0))%juce::jmax(1,pattern(current).length);if(target!=step){step=target-1;samplesToStep=0;}hasPpq=false;}
+  for(int i=0;i<n;i++){for(int v=0;v<voices;v++){if(pendingFlam[v]>0&&--pendingFlam[v]==0)trigger(v,.72f);if(pendingRatchet[v]>0&&ratchetCounter[v]<=0){trigger(v,.68f);pendingRatchet[v]--;ratchetCounter[v]=(int)juce::jmax(1.0,base/(pendingRatchet[v]+2));}if(ratchetCounter[v]>0)--ratchetCounter[v];}
    if(hostPlaying&&samplesToStep<=0){advance();double d=base*((step&1)?1.0+swing:1.0-swing);samplesToStep+=juce::jmax(1.0,d);}
    samplesToStep-=1.0; float l=0,r=0;
    float revSendL=0,revSendR=0,delSendL=0,delSendR=0;for(int v=0;v<voices;v++){float raw=(v>=8&&v<=10&&samples[(size_t)(v-8)].loaded)?samples[(size_t)(v-8)].process(sr)*sampleVelocity[(size_t)(v-8)]:dsp[v].process();float x=raw*gain[v];float pan=panorama[v];float vl=x*std::sqrt(.5f*(1-pan)),vr=x*std::sqrt(.5f*(1+pan));l+=vl;r+=vr;revSendL+=vl*reverbSend[v];revSendR+=vr*reverbSend[v];delSendL+=vl*delaySend[v];delSendR+=vr*delaySend[v];}
@@ -70,7 +71,7 @@ public:
  }
  float drive=1.15f,masterBass=1.0f,masterTreble=1.0f,masterComp=1.35f; std::array<float,voices> gain{1,1,1,1,1,1,1,1,1,1,1,1},panorama{},reverbSend{.08f,.12f,.08f,.16f,.12f,.12f,.14f,.18f,.10f,.10f,.10f,.15f},delaySend{0,0,0,.05f,.08f,.08f,.10f,.12f,.08f,.08f,.08f,.12f};
 private:
- void advance(){auto&p=pattern(current);step=(step+1)%juce::jmax(1,p.length);for(int v=0;v<voices;v++){auto&st=p.step[v][step];if(st.on&&random.nextFloat()<=st.probability){int reps=juce::jlimit(1,4,st.ratchet);trigger(v,juce::jlimit(0.f,1.f,st.velocity*(st.accent?1.18f:1.f)));(void)reps;}}}
+ void advance(){auto&p=pattern(current);step=(step+1)%juce::jmax(1,p.length);for(int v=0;v<voices;v++){auto&st=p.step[v][step];if(st.on&&random.nextFloat()<=st.probability){trigger(v,juce::jlimit(0.f,1.f,st.velocity*(st.accent?1.18f:1.f)));if(st.flam)pendingFlam[v]=juce::jmax(1,(int)(sr*.018));if(st.ratchet>1)pendingRatchet[v]=st.ratchet-1;}}}
  void initialiseFactoryPatterns(){for(int q=0;q<patterns;q++){auto&p=pats[q];p.length=16;for(int s=0;s<16;s++){p.step[0][s].on=s%4==0;p.step[1][s].on=s==4||s==12;p.step[3][s].on=s%2==0;p.step[4][s].on=(q%2)&&s%4==2;p.step[7][s].on=(q%3==2)&&(s==7||s==15);}}}
- double sr=44100,bpm=120,samplesToStep=0;float swing=0;bool hostPlaying=false;juce::Reverb reverb;std::vector<float>delayL,delayR;size_t delayPos=0;struct OnePole{float z=0;float process(float x){z+=.08f*(x-z);return z;}}masterLow;int current=0,step=-1;juce::Random random;std::array<VoiceDSP,voices>dsp{};std::array<SampleSlot,3>samples{};std::array<float,3>sampleVelocity{1,1,1};std::array<juce::String,3>sampleNames{};std::array<Pattern,patterns>pats{};
+ double sr=44100,bpm=120,samplesToStep=0,hostPpq=0;float swing=0;bool hostPlaying=false,hasPpq=false;std::array<int,voices>pendingFlam{},pendingRatchet{},ratchetCounter{};juce::Reverb reverb;std::vector<float>delayL,delayR;size_t delayPos=0;struct OnePole{float z=0;float process(float x){z+=.08f*(x-z);return z;}}masterLow;int current=0,step=-1;juce::Random random;std::array<VoiceDSP,voices>dsp{};std::array<SampleSlot,3>samples{};std::array<float,3>sampleVelocity{1,1,1};std::array<juce::String,3>sampleNames{};std::array<Pattern,patterns>pats{};
 };
