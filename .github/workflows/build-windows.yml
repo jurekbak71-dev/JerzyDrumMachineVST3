@@ -18,7 +18,7 @@ jobs:
      run: cmake --build build --config Release --target JerzyDrumMachine_VST3 JerzyDrumMachine_Standalone JerzyDrumMachineTests
    - name: DSP smoke test
      shell: pwsh
-     run: '& "build/JerzyDrumMachineTests_artefacts/Release/Jerzy Drum Machine Tests.exe"'
+     run: '& "build/JerzyDrumMachineTests_artefacts/Release/JerzyDrumMachineTests.exe"'
    - name: Package
      shell: pwsh
      run: |
