@@ -52,5 +52,11 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
 }
 void JerzyDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock&d){auto state=apvts.copyState();state.addChild(engine.saveState(),-1,nullptr);auto xml=state.createXml();copyXmlToBinary(*xml,d);}
 void JerzyDrumMachineAudioProcessor::setStateInformation(const void*d,int n){if(auto x=getXmlFromBinary(d,n)){auto state=juce::ValueTree::fromXml(*x);if(auto eng=state.getChildWithName("ENGINE");eng.isValid())engine.loadState(eng);apvts.replaceState(state);}}
+void JerzyDrumMachineAudioProcessor::syncParametersFromEngine(){
+ auto set=[this](const juce::String&id,float value){if(auto*par=apvts.getParameter(id))par->setValueNotifyingHost(par->convertTo0to1(value));};
+ set("drive",engine.drive);
+ for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";set(prefix+"gain",engine.gain[i]);set(prefix+"pan",engine.panorama[i]);set(prefix+"filter",engine.channelFilter[i]);set(prefix+"drive",engine.channelDrive[i]);set(prefix+"rev",engine.reverbSend[i]);set(prefix+"del",engine.delaySend[i]);set(prefix+"mute",engine.mute[i]?1.0f:0.0f);set(prefix+"solo",engine.solo[i]?1.0f:0.0f);set(voice+"tune",engine.getVoiceParam(i,0));set(voice+"decay",engine.getVoiceParam(i,1));set(voice+"tone",engine.getVoiceParam(i,2));set(voice+"character",engine.getVoiceParam(i,3));}
+ set("rev_size",engine.reverbSize);set("rev_damp",engine.reverbDamping);set("delay_beats",engine.delayBeats);set("delay_fb",engine.delayFeedback);set("delay_mix",engine.delayMix);set("master_bass",engine.masterBass);set("master_treble",engine.masterTreble);set("master_comp",engine.masterComp);
+}
 juce::AudioProcessorEditor* JerzyDrumMachineAudioProcessor::createEditor(){return new JerzyDrumMachineAudioProcessorEditor(*this);}
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new JerzyDrumMachineAudioProcessor();}
