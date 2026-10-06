@@ -3,59 +3,66 @@
 #include <array>
 #include <cmath>
 
-struct DrumVoice {
-    double sr=44100.0, phase=0.0, env=0.0, noiseEnv=0.0, freq=80.0; int type=0;
-    juce::Random rng;
-    void prepare(double s){sr=s;}
-    void trigger(float velocity,int t){type=t; phase=0; env=velocity; noiseEnv=velocity; freq=(t==0?55.0:(t==1?180.0:110.0+t*35.0));}
-    float process(){
-        if(env<0.00001f && noiseEnv<0.00001f) return 0;
-        const double sweep=freq*(1.0+env*(type==0?2.8:0.35));
-        phase+=juce::MathConstants<double>::twoPi*sweep/sr; if(phase>juce::MathConstants<double>::twoPi) phase-=juce::MathConstants<double>::twoPi;
-        float tonal=(float)std::sin(phase);
-        if(type>=4 && type<=7) tonal=(float)(0.65*std::sin(phase)+0.35*std::sin(phase*(type-1.25)));
-        if(type==11) tonal=(float)(0.7*std::sin(phase)+0.3*std::sin(phase*2.01));
-        float noise=rng.nextFloat()*2.0f-1.0f;
-        float mix=(type==1||type==3||type==6)? tonal*0.45f+noise*0.55f : tonal*0.88f+noise*0.12f;
-        env*= type==0?0.99935f:(type==3?0.994f:0.9975f); noiseEnv*=0.993f;
-        return std::tanh(mix*env*1.5f);
-    }
-};
-
-struct PatternStep { bool on=false; float velocity=.85f, probability=1.0f; int ratchet=1; };
+struct PatternStep { bool on=false; float velocity=.85f, probability=1.0f; int ratchet=1; float micro=0.0f; bool accent=false; };
 struct Pattern { std::array<std::array<PatternStep,64>,12> step{}; int length=16; };
+
+struct VoiceDSP {
+ double sr=44100.0, phase=0, phase2=0; float env=0, noiseEnv=0, velocity=0; int kind=0; juce::Random rng;
+ void prepare(double s){sr=s;}
+ void trigger(float v,int k){kind=k;velocity=v;env=v;noiseEnv=v;phase=phase2=0;}
+ float process(){
+  if(env<1.0e-5f && noiseEnv<1.0e-5f)return 0.0f;
+  const float n=rng.nextFloat()*2.0f-1.0f; double f=80.0;
+  switch(kind){
+   case 0:f=48.0+120.0*env;break; case 1:f=185.0;break; case 2:f=95.0;break; case 3:f=420.0;break;
+   case 4:f=155.0;break; case 5:f=240.0;break; case 6:f=330.0;break; case 7:f=520.0;break;
+   case 8:f=105.0;break; case 9:f=175.0;break; case 10:f=260.0;break; default:f=72.0;break;
+  }
+  phase+=juce::MathConstants<double>::twoPi*f/sr; phase2+=juce::MathConstants<double>::twoPi*f*(kind>=4&&kind<=7?1.414:2.01)/sr;
+  if(phase>juce::MathConstants<double>::twoPi)phase-=juce::MathConstants<double>::twoPi;
+  if(phase2>juce::MathConstants<double>::twoPi)phase2-=juce::MathConstants<double>::twoPi;
+  float a=(float)std::sin(phase),b=(float)std::sin(phase2),x=0;
+  if(kind==0)x=a*0.98f;
+  else if(kind==1)x=a*.32f+n*noiseEnv*.78f;
+  else if(kind==2)x=(a>0?1.f:-1.f)*.65f+a*.35f;
+  else if(kind==3)x=n*.65f+(a*b)*.45f;
+  else if(kind==4)x=std::sin((float)phase+b*3.5f);
+  else if(kind==5)x=std::tanh((a+b*.8f)*2.2f);
+  else if(kind==6)x=(a*.45f+b*.35f+n*.20f);
+  else if(kind==7)x=n*.55f+std::sin((float)phase+n*.9f)*.45f;
+  else if(kind>=8&&kind<=10)x=(a*.55f+n*.45f); // sample slots have distinct fallback synthesis until a WAV is loaded
+  else x=a*.7f+b*.3f;
+  env*= kind==0?.9988f:(kind==3?.985f:(kind==11?.9992f:.9945f)); noiseEnv*=.982f;
+  return std::tanh(x*velocity*1.65f);
+ }
+};
 
 class DrumEngine {
 public:
-    static constexpr int voices=12, patterns=32;
-    void prepare(double s){sr=s; for(auto&v:voice)v.prepare(s); initialiseFactoryPatterns();}
-    void trigger(int i,float vel){if(i>=0&&i<voices) voice[(size_t)i].trigger(vel,i);}
-    void setPattern(int p){current=juce::jlimit(0,patterns-1,p); step=-1; samplesToStep=0;}
-    int getPattern()const{return current;}
-    Pattern& pattern(int p){return pats[(size_t)juce::jlimit(0,patterns-1,p)];}
-    void setHost(double bpmIn,bool playing){bpm=bpmIn>20?bpmIn:120; hostPlaying=playing;}
-    void process(juce::AudioBuffer<float>& b){
-        const int n=b.getNumSamples(); b.clear();
-        double stepSamples=sr*60.0/bpm/4.0;
-        for(int s=0;s<n;++s){
-            if(hostPlaying && samplesToStep<=0){advance(); samplesToStep+=stepSamples;}
-            samplesToStep-=1.0;
-            float x=0; for(auto&v:voice)x+=v.process()*0.20f;
-            x=std::tanh(x*drive);
-            for(int c=0;c<b.getNumChannels();++c)b.setSample(c,s,x);
-        }
-    }
-    float drive=1.15f;
+ static constexpr int voices=12,patterns=32;
+ void prepare(double s){sr=s;for(auto&v:dsp)v.prepare(s);initialiseFactoryPatterns();}
+ void trigger(int i,float v){if(i>=0&&i<voices)dsp[(size_t)i].trigger(v,i);}
+ void setPattern(int p){current=juce::jlimit(0,patterns-1,p);step=-1;samplesToStep=0;}
+ int getPattern()const{return current;} int getCurrentStep()const{return step;}
+ Pattern& pattern(int p){return pats[(size_t)juce::jlimit(0,patterns-1,p)];}
+ void setHost(double b,bool play){bpm=b>20?b:120;hostPlaying=play;}
+ void setSwing(float s){swing=juce::jlimit(0.0f,.75f,s);}
+ void generate(float density,float variation){auto&p=pattern(current);for(int v=0;v<voices;v++)for(int s=0;s<p.length;s++){float role=v==0?(s%4==0?.85f:.15f):v==1?((s==4||s==12)?.9f:.08f):v==3?.55f:.22f;float chance=juce::jlimit(0.f,1.f,role*density+(random.nextFloat()-.5f)*variation);p.step[v][s].on=random.nextFloat()<chance;p.step[v][s].velocity=.55f+random.nextFloat()*.45f;p.step[v][s].probability=.72f+random.nextFloat()*.28f;}}
+ void mutate(float amount){auto&p=pattern(current);for(int v=0;v<voices;v++)for(int s=0;s<p.length;s++)if(random.nextFloat()<amount*.18f)p.step[v][s].on=!p.step[v][s].on;}
+ void fill(){auto&p=pattern(current);for(int s=juce::jmax(0,p.length-4);s<p.length;s++){p.step[3][s].on=true;p.step[3][s].velocity=.65f+.1f*(s&1);p.step[4][s].on=(s&1)!=0;}}
+ void process(juce::AudioBuffer<float>&out){
+  out.clear(); const int n=out.getNumSamples(); const double base=sr*60.0/bpm/4.0;
+  for(int i=0;i<n;i++){
+   if(hostPlaying&&samplesToStep<=0){advance();double d=base*((step&1)?1.0+swing:1.0-swing);samplesToStep+=juce::jmax(1.0,d);}
+   samplesToStep-=1.0; float l=0,r=0;
+   for(int v=0;v<voices;v++){float x=dsp[v].process()*gain[v];float pan=panorama[v];l+=x*std::sqrt(.5f*(1-pan));r+=x*std::sqrt(.5f*(1+pan));}
+   l=std::tanh(l*.24f*drive);r=std::tanh(r*.24f*drive);
+   if(out.getNumChannels()>0)out.setSample(0,i,l);if(out.getNumChannels()>1)out.setSample(1,i,r);
+  }
+ }
+ float drive=1.15f; std::array<float,voices> gain{1,1,1,1,1,1,1,1,1,1,1,1},panorama{};
 private:
-    void advance(){
-        auto&p=pats[(size_t)current]; step=(step+1)%juce::jmax(1,p.length);
-        for(int i=0;i<voices;++i){auto&st=p.step[(size_t)i][(size_t)step]; if(st.on && random.nextFloat()<=st.probability)trigger(i,st.velocity);}
-    }
-    void initialiseFactoryPatterns(){
-        for(int p=0;p<patterns;++p){auto&x=pats[(size_t)p];x.length=16;
-            for(int s=0;s<16;s++){x.step[0][s].on=(s%4==0)||(p%3==1&&s==10);x.step[1][s].on=(s==4||s==12);x.step[3][s].on=(s%2==0);x.step[4][s].on=(s==7||s==15);x.step[6][s].on=(p%2&&s%4==2);}
-        }
-    }
-    double sr=44100,bpm=120,samplesToStep=0; bool hostPlaying=false; int current=0,step=-1; juce::Random random;
-    std::array<DrumVoice,voices> voice{}; std::array<Pattern,patterns> pats{};
+ void advance(){auto&p=pattern(current);step=(step+1)%juce::jmax(1,p.length);for(int v=0;v<voices;v++){auto&st=p.step[v][step];if(st.on&&random.nextFloat()<=st.probability){int reps=juce::jlimit(1,4,st.ratchet);trigger(v,juce::jlimit(0.f,1.f,st.velocity*(st.accent?1.18f:1.f)));(void)reps;}}}
+ void initialiseFactoryPatterns(){for(int q=0;q<patterns;q++){auto&p=pats[q];p.length=16;for(int s=0;s<16;s++){p.step[0][s].on=s%4==0;p.step[1][s].on=s==4||s==12;p.step[3][s].on=s%2==0;p.step[4][s].on=(q%2)&&s%4==2;p.step[7][s].on=(q%3==2)&&(s==7||s==15);}}}
+ double sr=44100,bpm=120,samplesToStep=0;float swing=0;bool hostPlaying=false;int current=0,step=-1;juce::Random random;std::array<VoiceDSP,voices>dsp{};std::array<Pattern,patterns>pats{};
 };
