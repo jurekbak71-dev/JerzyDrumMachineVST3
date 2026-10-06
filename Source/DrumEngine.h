@@ -50,6 +50,9 @@ public:
  void trigger(int i,float v){if(i>=0&&i<voices){if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){sampleVelocity[(size_t)(i-8)]=v;samples[(size_t)(i-8)].trigger();}else dsp[(size_t)i].trigger(v,i);}}
  void setPattern(int p){current=juce::jlimit(0,patterns-1,p);step=-1;samplesToStep=0;hasPpq=false;}
  void setPreviewPlaying(bool shouldPlay){previewPlaying.store(shouldPlay,std::memory_order_relaxed);}
+ void setVirtualDrummer(bool enabled){if(enabled==virtualDrummerEnabled)return;virtualDrummerEnabled=enabled;generatedBars=0;if(enabled){savedPattern=pattern(current);pattern(current).length=juce::jmax(16,pattern(current).length);buildVirtualBar(0);}else pattern(current)=savedPattern;}
+ void setVirtualDrummerSettings(int styleIn,int divisionIn,float energyIn,float humanizeIn,float syncopationIn,int phraseBarsIn){drummerStyle=juce::jlimit(0,4,styleIn);hatDivision=divisionIn==1?1:(divisionIn==2?2:4);drummerEnergy=juce::jlimit(0.f,1.f,energyIn);drummerHumanize=juce::jlimit(0.f,1.f,humanizeIn);drummerSyncopation=juce::jlimit(0.f,1.f,syncopationIn);phraseBars=phraseBarsIn>=8?8:(phraseBarsIn<=2?2:4);if(virtualDrummerEnabled)buildVirtualBar(generatedBars);}
+ bool isVirtualDrummerEnabled()const{return virtualDrummerEnabled;}
  void requestPattern(int p){p=juce::jlimit(0,patterns-1,p);if(changeMode==ChangeMode::Immediate)setPattern(p);else pendingPattern=p;}
  void setChangeMode(ChangeMode m){changeMode=m;}
  ChangeMode getChangeMode()const{return changeMode;}
@@ -86,8 +89,19 @@ revSendL+=vl*reverbSend[v];revSendR+=vr*reverbSend[v];delSendL+=vl*delaySend[v];
  }
  float drive=1.15f,masterBass=1.0f,masterTreble=1.0f,masterComp=1.35f,reverbSize=.45f,reverbDamping=.55f,delayBeats=.75f,delayFeedback=.36f,delayMix=.45f; std::array<float,voices> gain{1,1,1,1,1,1,1,1,1,1,1,1},panorama{},reverbSend{.08f,.12f,.08f,.16f,.12f,.12f,.14f,.18f,.10f,.10f,.10f,.15f},delaySend{0,0,0,.05f,.08f,.08f,.10f,.12f,.08f,.08f,.08f,.12f},channelFilter{},channelDrive{}; std::array<bool,voices> mute{},solo{};
 private:
+ Pattern savedPattern{}; bool virtualDrummerEnabled=false; int generatedBars=0,drummerStyle=0,hatDivision=2,phraseBars=4; float drummerEnergy=.55f,drummerHumanize=.2f,drummerSyncopation=.25f;
  void advance(){auto&p=pattern(current);step=(step+1)%juce::jmax(1,p.length);for(int v=0;v<voices;v++){auto&st=p.step[v][step];if(st.on&&random.nextFloat()<=st.probability){int microDelay=juce::jmax(0,(int)(st.micro*sr*.03f));if(microDelay>0){pendingMicro[v]=microDelay;pendingVelocity[v]=juce::jlimit(0.f,1.f,st.velocity*(st.accent?1.18f:1.f));}else trigger(v,juce::jlimit(0.f,1.f,st.velocity*(st.accent?1.18f:1.f)));if(st.flam)pendingFlam[v]=juce::jmax(1,(int)(sr*.018));if(st.ratchet>1)pendingRatchet[v]=st.ratchet-1;}}
+  if(virtualDrummerEnabled&&step%16==15){++generatedBars;buildVirtualBar(generatedBars);}
   if(pendingPattern>=0){bool change=false;if(changeMode==ChangeMode::EndPattern&&step==p.length-1)change=true;else if(changeMode==ChangeMode::NextBeat&&(step%4)==0)change=true;else if(changeMode==ChangeMode::NextBar&&(step%16)==0)change=true;if(change){int np=pendingPattern;pendingPattern=-1;setPattern(np);}}}
+ void buildVirtualBar(int bar){auto&p=pattern(current);const int start=(bar*16)%juce::jmax(16,p.length);const int phrase=phraseBars>0?(bar/phraseBars)%4:0;const float energy=juce::jlimit(.15f,1.f,drummerEnergy+phrase*.12f);const float styleKick=drummerStyle==2?.78f:(drummerStyle==4?.9f:1.f);const float styleSnare=drummerStyle==1?.72f:(drummerStyle==2?.9f:1.f);const float styleHat=drummerStyle==4?.48f:(drummerStyle==2?.88f:1.f);
+  for(int i=0;i<16;i++){int s=(start+i)%p.length;for(int v=0;v<voices;v++){auto&st=p.step[v][s];st.on=false;st.flam=false;st.ratchet=1;st.probability=1.f;st.micro=0.f;st.accent=false;float chance=0.f;
+    if(v==0){if(i%4==0)chance=.96f*styleKick;else if((i==6||i==14)&&drummerStyle==3)chance=.35f*drummerSyncopation;else if((i==10)&&drummerStyle==2)chance=.26f*drummerSyncopation;}
+    else if(v==1){if(i==4||i==12)chance=.92f*styleSnare;else if((i==3||i==11||i==14)&&drummerStyle!=4)chance=.08f+energy*.14f;}
+    else if(v==3){if(i%hatDivision==0)chance=juce::jlimit(.1f,.98f,.48f+energy*.38f)*styleHat;}
+    else if(v>=4&&v<=7){if((i%8==6||i%8==2)&&drummerStyle==2)chance=.18f+energy*.32f;else if(i%8==7&&drummerStyle==1)chance=.1f+energy*.2f;}
+    if(phrase==3&&i>=12){if(v==3)chance=juce::jmax(chance,.82f);if(v==1&&i%2==0)chance=juce::jmax(chance,.58f);if(v==4&&i%2==1)chance=juce::jmax(chance,.42f);}
+    st.on=random.nextFloat()<chance;const float accent=(i%4==0)?1.f:.78f;st.velocity=juce::jlimit(.25f,1.f,accent*(.72f+(random.nextFloat()-.5f)*drummerHumanize*.36f));st.micro=juce::jlimit(0.f,1.f,random.nextFloat()*drummerHumanize*.22f);st.accent=(i%4==0)&&v==0;
+  }} }
  void initialiseFactoryPatterns(){for(int q=0;q<patterns;q++){auto&p=pats[q];p.length=16;for(int s=0;s<16;s++){p.step[0][s].on=s%4==0;p.step[1][s].on=s==4||s==12;p.step[3][s].on=s%2==0;p.step[4][s].on=(q%2)&&s%4==2;p.step[7][s].on=(q%3==2)&&(s==7||s==15);}}}
  double sr=44100,bpm=120,samplesToStep=0,hostPpq=0;float swing=0,complexity=.5f,syncopation=.25f,humanize=.15f,chaos=.1f,kickStability=.85f,snareStability=.9f,hatActivity=.65f,percActivity=.35f;bool hostPlaying=false,hasPpq=false;std::atomic<bool>previewPlaying{false};std::array<int,voices>pendingFlam{},pendingRatchet{},ratchetCounter{},pendingMicro{};std::array<float,voices>pendingVelocity{};int pendingPattern=-1;ChangeMode changeMode=ChangeMode::EndPattern;juce::Reverb reverb;std::vector<float>delayL,delayR;size_t delayPos=0;struct OnePole{float z=0;float process(float x){z+=.08f*(x-z);return z;}}masterLow;int current=0,step=-1;juce::Random random;std::array<VoiceDSP,voices>dsp{};std::array<SampleSlot,3>samples{};std::array<float,3>sampleVelocity{1,1,1};std::array<juce::String,3>sampleNames{};std::array<Pattern,patterns>pats{};std::array<float,voices>channelLP{};
 };
