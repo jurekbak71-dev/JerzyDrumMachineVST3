@@ -7,12 +7,44 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
  p.push_back(std::make_unique<juce::AudioParameterFloat>("swing","Swing",0.0f,0.75f,0.0f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("density","Generate Density",0.0f,1.0f,0.5f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("variation","Generate Variation",0.0f,1.0f,0.25f));
+ for(int i=0;i<12;i++){
+  auto prefix="ch"+juce::String(i)+"_";
+  auto voice="v"+juce::String(i)+"_";
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(prefix+"gain","Ch "+juce::String(i+1)+" Level",0.0f,1.5f,1.0f));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(prefix+"pan","Ch "+juce::String(i+1)+" Pan",-1.0f,1.0f,0.0f));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(prefix+"filter","Ch "+juce::String(i+1)+" Filter",0.0f,1.0f,0.0f));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(prefix+"drive","Ch "+juce::String(i+1)+" Drive",0.0f,1.0f,0.0f));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(prefix+"rev","Ch "+juce::String(i+1)+" Reverb Send",0.0f,1.0f,0.1f));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(prefix+"del","Ch "+juce::String(i+1)+" Delay Send",0.0f,1.0f,0.0f));
+  p.push_back(std::make_unique<juce::AudioParameterBool>(prefix+"mute","Ch "+juce::String(i+1)+" Mute",false));
+  p.push_back(std::make_unique<juce::AudioParameterBool>(prefix+"solo","Ch "+juce::String(i+1)+" Solo",false));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(voice+"tune","Voice "+juce::String(i+1)+" Tune",0.0f,1.0f,0.5f));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(voice+"decay","Voice "+juce::String(i+1)+" Decay",0.0f,1.0f,0.5f));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(voice+"tone","Voice "+juce::String(i+1)+" Tone",0.0f,1.0f,0.5f));
+  p.push_back(std::make_unique<juce::AudioParameterFloat>(voice+"character","Voice "+juce::String(i+1)+" Character",0.0f,1.0f,0.5f));
+ }
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("rev_size","Reverb Size",0.0f,1.0f,0.45f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("rev_damp","Reverb Damping",0.0f,1.0f,0.55f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("delay_beats","Delay Time Beats",juce::NormalisableRange<float>(0.125f,2.0f,0.125f),0.75f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("delay_fb","Delay Feedback",0.0f,0.88f,0.36f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("delay_mix","Delay Mix",0.0f,1.0f,0.45f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("master_bass","Master Bass",0.4f,1.8f,1.0f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("master_treble","Master Treble",0.4f,1.8f,1.0f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("master_comp","Master Compressor",0.6f,3.0f,1.35f));
  return {p.begin(),p.end()};
 }
 void JerzyDrumMachineAudioProcessor::prepareToPlay(double s,int){engine.prepare(s);}
 bool JerzyDrumMachineAudioProcessor::isBusesLayoutSupported(const BusesLayout&l)const{return l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
 void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juce::MidiBuffer&m){
- juce::ScopedNoDenormals no; engine.drive=apvts.getRawParameterValue("drive")->load(); engine.setSwing(apvts.getRawParameterValue("swing")->load());
+ juce::ScopedNoDenormals no;
+ auto param=[this](const juce::String&id){if(auto*v=apvts.getRawParameterValue(id))return v->load();return 0.0f;};
+ engine.drive=param("drive");engine.setSwing(param("swing"));
+ for(int i=0;i<12;i++){
+  auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";
+  engine.gain[i]=param(prefix+"gain");engine.panorama[i]=param(prefix+"pan");engine.channelFilter[i]=param(prefix+"filter");engine.channelDrive[i]=param(prefix+"drive");engine.reverbSend[i]=param(prefix+"rev");engine.delaySend[i]=param(prefix+"del");engine.mute[i]=param(prefix+"mute")>.5f;engine.solo[i]=param(prefix+"solo")>.5f;
+  engine.setVoiceParam(i,0,param(voice+"tune"));engine.setVoiceParam(i,1,param(voice+"decay"));engine.setVoiceParam(i,2,param(voice+"tone"));engine.setVoiceParam(i,3,param(voice+"character"));
+ }
+ engine.setReverb(param("rev_size"),param("rev_damp"));engine.setDelay(param("delay_beats"),param("delay_fb"),param("delay_mix"));engine.setMaster(param("master_bass"),param("master_treble"),param("master_comp"));
  double bpm=120; bool playing=true; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
  engine.setHost(bpm,playing);
  for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOn()){int note=msg.getNoteNumber();if(note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else if(note>=60&&note<92)engine.requestPattern(note-60);}}
