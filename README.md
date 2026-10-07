@@ -18,3 +18,5 @@ Build status: CI validation enabled.
 
 
 <!-- Jerzy VST GUI System CI validation -->
+
+<!-- Jerzy GUI validation pass 2 -->
