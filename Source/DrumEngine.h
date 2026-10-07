@@ -135,7 +135,7 @@ struct VoiceDSP {
     f1=juce::jmap(t,180.0f,5200.0f);const float a=juce::jmap((float)f1,180.0f,5200.0f,.025f,.48f);
     noiseLow+=a*(n-noiseLow);noiseBand+=a*(noiseLow-noiseBand);x=(noiseLow-noiseBand)*(.7f+c*1.4f)+noiseBand*(.05f+.45f*b);break;
    }
-   default:{f1=juce::jmap(t,65.0,880.0);phase+=f1/sr;if(phase>=1)phase-=1;x=sine(phase)*.7f+n*.3f;break;}
+   default:{f1=juce::jmap(t,65.0f,880.0f);phase+=f1/sr;if(phase>=1)phase-=1;x=sine(phase)*.7f+n*.3f;break;}
   }
   env*=drumDecayCoeff;
   return std::tanh(x*env*velocity*1.7f);
@@ -330,6 +330,7 @@ revSendL+=vl*reverbSend[v];revSendR+=vr*reverbSend[v];delSendL+=vl*delaySend[v];
   }
  }
   float drive=1.15f,masterBass=1.0f,masterTreble=1.0f,masterComp=1.35f,reverbSize=.45f,reverbDamping=.55f,reverbMix=.35f,delayBeats=.75f,delayFeedback=.36f,delayMix=.45f,compressorThresholdDb=-18.f,compressorRatio=3.f,compressorAttackMs=10.f,compressorReleaseMs=120.f,compressorBoostDb=0.f; bool reverbEnabled=true,delayEnabled=true,delayPingPong=true,compressorEnabled=true; std::array<float,voices> gain{1,1,1,1,1,1,1,1,1,1,1,1},panorama{},reverbSend{.08f,.12f,.08f,.16f,.12f,.12f,.14f,.18f,.10f,.10f,.10f,.15f},delaySend{0,0,0,.05f,.08f,.08f,.10f,.12f,.08f,.08f,.08f,.12f},channelFilter{},channelDrive{}; std::array<bool,voices> mute{},solo{};
+ friend class JerzyDrumMachineAudioProcessor;
 private:
  std::array<SongEntry,maxSongEntries>songChain{};std::array<std::atomic<int>,maxSongEntries>audioSongPattern{},audioSongBars{};std::atomic<int>activeSongLength{0},songPosition{0};int songLength=0,songTicks=0;std::atomic<bool>songPlaying{false};
  Pattern savedPattern{}; std::atomic<bool>virtualDrummerEnabled{false}; int generatedBars=0,drummerStyle=0,hatDivision=2,phraseBars=4,fillEveryBars=4,breakEveryBars=8; float drummerEnergy=.55f,drummerHumanize=.2f,drummerSyncopation=.25f;
