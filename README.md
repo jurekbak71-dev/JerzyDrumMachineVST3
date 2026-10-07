@@ -15,3 +15,6 @@ Każdy push uruchamia Windows build i publikuje ZIP VST3 jako artifact GitHub Ac
 
 
 Build status: CI validation enabled.
+
+
+<!-- Jerzy VST GUI System CI validation -->
