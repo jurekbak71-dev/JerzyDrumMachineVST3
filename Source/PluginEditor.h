@@ -1,6 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
-#include "PluginProcessor.h"
+#include "PluginProcessor.h"\n#include "JerzyVSTGuiKit.h"
 
 class CopperLookAndFeel : public juce::LookAndFeel_V4 {
 public:
