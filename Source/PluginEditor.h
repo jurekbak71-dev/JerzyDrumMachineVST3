@@ -2,6 +2,13 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
+class SynthKeyboardKey : public juce::TextButton {
+public:
+ std::function<void()> onNoteDown,onNoteUp;
+ void mouseDown(const juce::MouseEvent& e) override {juce::TextButton::mouseDown(e);if(onNoteDown)onNoteDown();}
+ void mouseUp(const juce::MouseEvent& e) override {juce::TextButton::mouseUp(e);if(onNoteUp)onNoteUp();}
+};
+
 class CopperLookAndFeel : public juce::LookAndFeel_V4 {
 public:
  CopperLookAndFeel(){
@@ -74,18 +81,23 @@ private:
  JerzyDrumMachineAudioProcessor&p; CopperLookAndFeel copper; int page=0,selected=0;
  juce::TextButton seq{"SEQ"},sound{"SOUND"},mix{"MIX"},fxPage{"FX"},drummer{"DRUMMER"},songPage{"SONG"},run{"RUN"},generate{"GENERATE"},mutate{"MUTATE"},fill{"FILL"};
  std::array<juce::TextButton,12> instruments; std::array<bool,12> instrumentHover{}; std::array<juce::TextButton,16> steps; std::array<juce::TextButton,4> banks;
- juce::TextButton loadSample{"LOAD WAV"}; std::unique_ptr<juce::FileChooser> chooser; juce::ToggleButton showSynthKeyboard{"SHOW MIDI KEYBOARD"}; std::array<juce::TextButton,24> synthKeys;
- std::array<juce::Slider,12> channelGain,channelPan,channelFilter,channelDrive,revSend,delSend; std::array<juce::TextButton,12> channelMute,channelSolo; juce::Slider masterDrive; std::array<juce::Slider,13> fxParam;
+ juce::TextButton loadSample{"LOAD WAV"}; std::unique_ptr<juce::FileChooser> chooser; juce::ToggleButton showSynthKeyboard{"SHOW MIDI KEYBOARD"}; std::array<SynthKeyboardKey,24> synthKeys;
+ std::array<juce::Slider,12> channelGain,channelPan,channelFilter,channelDrive,revSend,delSend; std::array<juce::TextButton,12> channelMute,channelSolo; juce::Slider masterDrive; std::array<juce::Slider,14> fxParam;
  juce::ToggleButton reverbEnable{"REVERB ON"},delayEnable{"DELAY ON"},delayPingPong{"PING-PONG"},compressorEnable{"COMP ON"};
  using SliderAttachment=juce::AudioProcessorValueTreeState::SliderAttachment; using ButtonAttachment=juce::AudioProcessorValueTreeState::ButtonAttachment;
  std::array<std::unique_ptr<SliderAttachment>,12> gainAtt,panAtt,filterAtt,driveAtt,revAtt,delAtt; std::array<std::unique_ptr<ButtonAttachment>,12> muteAtt,soloAtt;
- std::array<std::unique_ptr<SliderAttachment>,4> soundAtt; std::array<std::unique_ptr<SliderAttachment>,13> fxAtt; std::array<std::unique_ptr<ButtonAttachment>,4> fxButtonAtt; std::unique_ptr<SliderAttachment> masterDriveAtt;
+ std::array<std::unique_ptr<SliderAttachment>,4> soundAtt; std::array<std::unique_ptr<SliderAttachment>,14> fxAtt; std::array<std::unique_ptr<ButtonAttachment>,4> fxButtonAtt; std::unique_ptr<SliderAttachment> masterDriveAtt;
  std::array<juce::Slider,4> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet;
  juce::ToggleButton stepAccent{"ACCENT"},stepFlam{"FLAM"}; juce::Slider patternLength,stepMicro;
  juce::ComboBox patternSelect,changeMode,stepNote; std::array<juce::Slider,8> genParam;
  juce::ToggleButton drummerEnable{"AUTO DRUMMER"}; std::array<juce::Slider,3> drummerParam; juce::ComboBox drummerStyle,hatDivision,phraseLength;
  std::array<juce::TextButton,16> songSlots; juce::ComboBox songPatternSelect,songSectionSelect; juce::TextButton songAdd{"ADD / UPDATE"},songRemove{"REMOVE SLOT"},songPlay{"PLAY SONG"}; int selectedSongSlot=0;
  juce::TextButton saveKit{"SAVE KIT"},loadKit{"LOAD KIT"}; std::unique_ptr<juce::FileChooser> kitChooser;
+ juce::Slider trackLength,artifactAmount,artifactSeed; std::array<juce::Slider,8> synthParam;
+ juce::ComboBox synthWave1,synthWave2,songBars,drummerFillEvery,drummerBreakEvery;
+ juce::ToggleButton synthOsc2Enable{"OSC 2"},synthFilterEnable{"FILTER"},artifactEnable{"SEED RANDOMIZE"};juce::TextButton randomizeSeed{"NEW SEED"};
+ using ComboAttachment=juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+ std::array<std::unique_ptr<SliderAttachment>,8> synthAtt; std::array<std::unique_ptr<ComboAttachment>,2> synthWaveAtt; std::array<std::unique_ptr<ButtonAttachment>,3> synthButtonAtt;std::unique_ptr<SliderAttachment> artifactAmountAtt,artifactSeedAtt;
  int bank=0,selectedStep=0;
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JerzyDrumMachineAudioProcessorEditor)
 };

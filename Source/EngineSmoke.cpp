@@ -1,55 +1,40 @@
 #include <JuceHeader.h>
 #include "DrumEngine.h"
-#include <iostream>
 #include <cmath>
 #include <fstream>
-#include <string>
+#include <iostream>
 #include <memory>
-int main(){
+#include <string>
+
+int main()
+{
  std::ofstream trace("smoke-diagnostics.txt",std::ios::out|std::ios::trunc);
  auto log=[&](const std::string& message){trace<<message<<'\n';trace.flush();std::cerr<<message<<'\n'<<std::flush;};
- try{
-  log("SMOKE: main entered");
-  auto e=std::make_unique<DrumEngine>();
-  log("SMOKE: engine constructed");
-  e->prepare(48000.0);
-  log("SMOKE: prepared");
-  e->setHost(120.0,false);
-  e->trigger(0,1.0f);
-  juce::AudioBuffer<float> b(2,8192);
-  e->process(b);
-  log("SMOKE: processed direct trigger");
-  double energy=0.0;
-  for(int ch=0;ch<2;ch++)for(int i=0;i<b.getNumSamples();i++){auto x=b.getSample(ch,i);if(!std::isfinite(x)){log("FAIL: non-finite audio");return 4;}energy+=std::abs(x);}
-  log(std::string("SMOKE: energy=")+std::to_string(energy));
-  if(!(energy>1.0)){log("FAIL: engine produced silence");return 2;}
-  auto renderAnalog=[](int kind,int parameter,float value){
-   VoiceDSP voice;voice.prepare(48000.0);voice.rng.setSeed(0x12345678);
-   voice.tune=.2f;voice.decay=.35f;voice.tone=.25f;voice.character=.2f;
-   if(parameter==0)voice.tune=value;else if(parameter==1)voice.decay=value;else if(parameter==2)voice.tone=value;else voice.character=value;
-   voice.trigger(.8f,kind);double sum=0.0;
-   for(int i=0;i<4096;i++){const float x=voice.process();sum+=std::abs(x);}
-   return sum;
-  };
-  for(int kind=0;kind<4;kind++)for(int parameter=0;parameter<4;parameter++){
-   const double low=renderAnalog(kind,parameter,.2f),high=renderAnalog(kind,parameter,.8f);
-   if(std::abs(low-high)<.01){log("FAIL: analog control does not change rendered voice "+std::to_string(kind)+" parameter "+std::to_string(parameter));return 8;}
-  }
-  log("SMOKE: all kick/snare/tom/hat controls change rendered audio");
-  e->triggerSynthNote(69,.8f);
-  if(e->getSynthMidiNote()!=69){log("FAIL: synth MIDI pitch was not applied");return 5;}
-  e->pattern(0).step[11][0].note=72;e->pattern(0).step[11][0].on=true;
-  e->setSongEntry(0,0,0);e->setSongEntry(1,1,2);
-  e->gain[0]=0.42f;e->panorama[0]=-0.25f;
-  auto state=e->saveState();
-  log("SMOKE: state saved");
-  auto copy=std::make_unique<DrumEngine>();copy->prepare(48000.0);copy->loadState(state);
-  log("SMOKE: state restored");
-  if(std::abs(copy->gain[0]-0.42f)>.001f||std::abs(copy->panorama[0]+0.25f)>.001f){log("FAIL: state restore mismatch");return 3;}
-  if(copy->pattern(0).step[11][0].note!=72){log("FAIL: synth step note did not survive state restore");return 6;}
-  if(copy->getSongLength()!=2||copy->getSongEntry(1).pattern!=1||copy->getSongEntry(1).section!=2){log("FAIL: song chain did not survive state restore");return 7;}
-  log("PASS: audio, synth MIDI pitch and state smoke test");
-  return 0;
- }catch(const std::exception&e){log(std::string("FAIL exception: ")+e.what());return 10;}
+ try
+ {
+  DrumEngine engine;engine.prepare(48000.0);engine.setHost(120.0,false);engine.trigger(0,1.0f);
+  juce::AudioBuffer<float> audio(2,8192);engine.process(audio);double energy=0.0;
+  for(int channel=0;channel<2;channel++)for(int sample=0;sample<audio.getNumSamples();sample++){const float value=audio.getSample(channel,sample);if(!std::isfinite(value)){log("FAIL: non-finite output");return 1;}energy+=std::abs(value);}
+  if(energy<=1.0){log("FAIL: engine produced silence");return 2;}
+
+  auto renderDrum=[](int kind,int parameter,float value){VoiceDSP voice;voice.prepare(48000.0);voice.tune=.2f;voice.decay=.35f;voice.tone=.25f;voice.character=.2f;float* target=parameter==0?&voice.tune:(parameter==1?&voice.decay:(parameter==2?&voice.tone:&voice.character));*target=value;voice.trigger(.8f,kind);double sum=0.0;for(int i=0;i<8192;i++)sum+=std::abs(voice.process());return sum;};
+  for(int kind=0;kind<4;kind++)for(int parameter=0;parameter<4;parameter++){const double low=renderDrum(kind,parameter,.2f),high=renderDrum(kind,parameter,.8f);if(std::abs(low-high)<.01){log("FAIL: drum control did not change audio");return 3;}}
+
+  VoiceDSP synth;synth.prepare(48000.0);synth.configureSynth(.1f,1000.0f,1.0f,100.0f,20000.0f,0.0f,0,0,false,0.0f,0.0f,0,false);synth.synthNoteOn(60,1.0f);
+  int firstCrossing=-1,lastCrossing=-1,crossings=0;float previous=0.0f;
+  for(int i=0;i<48000;i++){const float sample=synth.processSynth();if(previous<=0.0f&&sample>0.0f){if(firstCrossing<0)firstCrossing=i;lastCrossing=i;++crossings;}previous=sample;}
+  const double measuredHz=(crossings>1)?(crossings-1)*48000.0/(lastCrossing-firstCrossing):0.0;
+  if(std::abs(measuredHz-261.625565)>1.5){log("FAIL: MIDI note 60 is not tuned to C4");return 4;}
+
+  DrumEngine rhythm;rhythm.prepare(48000.0);rhythm.setHost(120.0,false);rhythm.pattern(0).length=64;rhythm.setTrackLength(0,0,3);rhythm.setTrackLength(0,1,5);rhythm.setPreviewPlaying(true);juce::AudioBuffer<float> rhythmAudio(2,36001);rhythm.process(rhythmAudio);
+  if(rhythm.getTrackStep(0)!=0||rhythm.getTrackStep(1)!=1){log("FAIL: independent track loops did not advance at separate lengths");return 5;}
+
+  engine.pattern(0).step[11][0].note=72;engine.pattern(0).step[11][0].on=true;engine.setTrackLength(0,0,7);engine.setSongEntry(0,0,0,8);engine.setSongEntry(1,1,2,3);engine.gain[0]=.42f;engine.panorama[0]=-.25f;
+  auto state=engine.saveState();DrumEngine restored;restored.prepare(48000.0);restored.loadState(state);
+  if(std::abs(restored.gain[0]-.42f)>.001f||std::abs(restored.panorama[0]+.25f)>.001f||restored.pattern(0).step[11][0].note!=72||restored.pattern(0).trackLength[0]!=7){log("FAIL: engine state did not restore");return 6;}
+  if(restored.getSongLength()!=2||restored.getSongEntry(0).bars!=8||restored.getSongEntry(1).pattern!=1||restored.getSongEntry(1).section!=2){log("FAIL: song chain did not restore section lengths");return 7;}
+  log("PASS: audio finite, drum controls audible, C4 tuned, polyrhythm advances independently, state round-trip");return 0;
+ }
+ catch(const std::exception& error){log(std::string("FAIL exception: ")+error.what());return 10;}
  catch(...){log("FAIL unknown exception");return 11;}
 }
