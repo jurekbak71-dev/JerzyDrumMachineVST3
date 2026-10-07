@@ -2,9 +2,9 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"\n#include "JerzyVSTGuiKit.h"
 
-class CopperLookAndFeel : public juce::LookAndFeel_V4 {
+class CopperLookAndFeel : public JerzyAudioUI::HardwareLookAndFeel {
 public:
- CopperLookAndFeel(){
+ CopperLookAndFeel() : JerzyAudioUI::HardwareLookAndFeel(JerzyAudioUI::brass()){
   setColour(juce::TextButton::textColourOffId, juce::Colour(0xffd7a45d));
   setColour(juce::TextButton::textColourOnId, juce::Colour(0xffffd58a));
   setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff17110e));
