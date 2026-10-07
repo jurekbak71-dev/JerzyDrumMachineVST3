@@ -96,13 +96,11 @@ void JerzyDrumMachineAudioProcessorEditor::syncStepControls(){auto&st=p.engine.p
 void JerzyDrumMachineAudioProcessorEditor::timerCallback(){repaint();}
 
 static void panel(juce::Graphics&g,juce::Rectangle<float>r){
- g.setGradientFill(juce::ColourGradient(juce::Colour(0xff1b1310),r.getTopLeft(),juce::Colour(0xff0b0908),r.getBottomRight(),false));g.fillRoundedRectangle(r,7);
- g.setColour(juce::Colour(0xff5e3928));g.drawRoundedRectangle(r,7,1.2f);g.setColour(juce::Colour(0x33210f08));g.drawRoundedRectangle(r.reduced(4),5,1);
+ JerzyAudioUI::paintPanel(g,r,JerzyAudioUI::brass(),7.0f);
 }
 
 void JerzyDrumMachineAudioProcessorEditor::paint(juce::Graphics&g){
- auto all=getLocalBounds().toFloat();g.setGradientFill(juce::ColourGradient(juce::Colour(0xff120e0c),all.getTopLeft(),juce::Colour(0xff050505),all.getBottomRight(),false));g.fillRect(all);
- g.setColour(juce::Colour(0xff6d422d));g.drawRoundedRectangle(all.reduced(7),9,2);
+ auto all=getLocalBounds().toFloat();JerzyAudioUI::paintChassis(g,all,JerzyAudioUI::brass());
  g.setColour(juce::Colour(0xffa36536));g.drawLine(18,70,(float)getWidth()-18,70,1);
  g.setColour(juce::Colour(0xffd5984f));g.setFont(juce::Font(27.0f,juce::Font::bold));g.drawText("JERZY",24,15,110,34,juce::Justification::centredLeft);
  g.setColour(juce::Colour(0xffe3b66f));g.setFont(juce::Font(22.0f,juce::Font::plain));g.drawText("DRUM MACHINE",132,16,220,32,juce::Justification::centredLeft);
