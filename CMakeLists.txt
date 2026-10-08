@@ -12,7 +12,7 @@ target_compile_definitions(JerzyDrumMachine PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_C
 target_link_libraries(JerzyDrumMachine PRIVATE juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 juce_add_console_app(JerzyDrumMachineTests PRODUCT_NAME "JerzyDrumMachineTests")
-target_sources(JerzyDrumMachineTests PRIVATE Source/EngineSmoke.cpp Source/DrumEngine.h)
+target_sources(JerzyDrumMachineTests PRIVATE Source/EngineSmoke.cpp Source/DrumEngine.h Source/PluginProcessor.cpp Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginEditor.h)
 juce_generate_juce_header(JerzyDrumMachineTests)
 target_compile_definitions(JerzyDrumMachineTests PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-target_link_libraries(JerzyDrumMachineTests PRIVATE juce::juce_audio_basics juce::juce_audio_formats juce::juce_dsp juce::juce_data_structures juce::juce_core PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+target_link_libraries(JerzyDrumMachineTests PRIVATE juce::juce_audio_utils juce::juce_audio_formats juce::juce_dsp juce::juce_data_structures juce::juce_core PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)

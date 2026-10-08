@@ -97,7 +97,7 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  engine.setArtifactSettings(param("artifact_enable")>.5f,param("artifact_amount"),(uint32_t)param("artifact_seed"));
  double bpm=120; bool playing=true; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
  engine.setHost(bpm,playing);
- for(const auto meta:m){auto msg=meta.getMessage();if(msg.isNoteOff()){if(msg.getChannel()==2)engine.releaseSynthNote(msg.getNoteNumber());else if(msg.getNoteNumber()>=48&&msg.getNoteNumber()<60)engine.releaseSynthNote(msg.getNoteNumber()+12);}else if(msg.isNoteOn()){int note=msg.getNoteNumber();if(msg.getChannel()==2)engine.triggerSynthNote(note,msg.getFloatVelocity());else if(note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else if(note>=48&&note<60)engine.triggerSynthNote(note+12,msg.getFloatVelocity());else if(note>=60&&note<92)engine.requestPattern(note-60);}}
+ for(const auto meta:m){auto msg=meta.getMessage();const int note=msg.getNoteNumber();if(msg.isNoteOff()){if(msg.getChannel()==2||(msg.getChannel()==1&&(note<36||note>=48)))engine.releaseSynthNote(note);}else if(msg.isNoteOn()){if(msg.getChannel()==2)engine.triggerSynthNote(note,msg.getFloatVelocity());else if(msg.getChannel()==16&&note>=60&&note<92)engine.requestPattern(note-60);else if(msg.getChannel()==1&&note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else engine.triggerSynthNote(note,msg.getFloatVelocity());}}
  auto master=getBusBuffer(b,false,0);
  std::array<juce::AudioBuffer<float>,DrumEngine::voices> stemViews;
  std::array<juce::AudioBuffer<float>*,DrumEngine::voices> stems{};

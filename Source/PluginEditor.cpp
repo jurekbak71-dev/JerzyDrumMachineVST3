@@ -132,7 +132,7 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  saveKit.onClick=[this]{kitChooser=std::make_unique<juce::FileChooser>("Save Jerzy Drum Kit",juce::File{},"*.jdmkit");kitChooser->launchAsync(juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles,[this](const juce::FileChooser&fc){auto file=fc.getResult();if(file.getFileExtension().isEmpty())file=file.withFileExtension(".jdmkit");if(auto xml=p.engine.saveState().createXml())xml->writeTo(file);});};
  loadKit.onClick=[this]{kitChooser=std::make_unique<juce::FileChooser>("Load Jerzy Drum Kit",juce::File{},"*.jdmkit");kitChooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,[this](const juce::FileChooser&fc){auto file=fc.getResult();if(auto xml=juce::XmlDocument::parse(file)){p.engine.loadState(juce::ValueTree::fromXml(*xml));p.syncParametersFromEngine();attachSoundParameters();syncVisibleSteps();syncStepControls();repaint();}});};
 
- syncVisibleSteps();syncStepControls();syncSongSlots();startTimerHz(20);
+ syncVisibleSteps();syncStepControls();syncSongSlots();resized();startTimerHz(20);
 }
 
 JerzyDrumMachineAudioProcessorEditor::~JerzyDrumMachineAudioProcessorEditor(){setLookAndFeel(nullptr);}
@@ -158,12 +158,13 @@ void JerzyDrumMachineAudioProcessorEditor::paint(juce::Graphics&g){
  g.setColour(juce::Colour(0xffc88948));g.setFont(13);g.drawText(page==0?"SEQUENCER / PATTERN":page==1?"SOUND / KIT":page==2?"MIXER / CHANNELS":page==3?"FX / EFFECT RACK":page==4?"VIRTUAL DRUMMER":"SONG / ARRANGEMENT",24,82,280,24,juce::Justification::centredLeft);
 
  if(page==0){
-  panel(g,{18,112,160,(float)getHeight()-132});panel(g,{188,112,(float)getWidth()-206,382});panel(g,{188,505,(float)getWidth()-206,138});panel(g,{18,654,(float)getWidth()-36,126});
- g.setColour(juce::Colour(0xff9b6a43));g.setFont(11);g.drawText("INSTRUMENTS",30,120,130,18,juce::Justification::centredLeft);g.drawText("STEP PARAMETERS",204,512,140,18,juce::Justification::centredLeft);g.drawText("GENERATIVE GROOVE",34,660,160,18,juce::Justification::centredLeft);
-  static const char* labels[]={"VELOCITY","PROBABILITY","RATCHET","MICROTIMING"};for(int i=0;i<4;i++)g.drawText(labels[i],205,539+i*26,92,20,juce::Justification::centredLeft);
-  g.drawText("TRACK LOOP",690,539,112,20,juce::Justification::centredLeft);g.drawText("MASTER STEPS",690,565,112,20,juce::Justification::centredLeft);g.drawText("PATTERN",690,591,112,20,juce::Justification::centredLeft);g.drawText("CHANGE MODE",690,617,112,20,juce::Justification::centredLeft);
-  if(selected==11)g.drawText("NOTE",1040,591,60,20,juce::Justification::centredLeft);
-  static const char*gn[]={"COMPLEX","SYNCOP","HUMAN","CHAOS","KICK STAB","SNARE STAB","HAT ACT","PERC ACT"};for(int i=0;i<8;i++)g.drawText(gn[i],32+i*((getWidth()-64)/8),744,(getWidth()-64)/8,18,juce::Justification::centred);
+  const int paramY=juce::jmax(395,getHeight()-283),grooveY=getHeight()-146;
+  panel(g,{18,112,160.0f,(float)getHeight()-132});panel(g,{188,112,(float)getWidth()-206,382});panel(g,{188,(float)paramY-31,(float)getWidth()-206,138});panel(g,{18,(float)grooveY,(float)getWidth()-36,126});
+  g.setColour(juce::Colour(0xff9b6a43));g.setFont(11);g.drawText("INSTRUMENTS",30,120,130,18,juce::Justification::centredLeft);g.drawText("STEP PARAMETERS",204,paramY-25,140,18,juce::Justification::centredLeft);g.drawText("GENERATIVE GROOVE",34,grooveY+8,160,18,juce::Justification::centredLeft);
+  static const char* labels[]={"VELOCITY","PROBABILITY","RATCHET","MICROTIMING"};for(int i=0;i<4;i++)g.drawText(labels[i],205,paramY+i*26,92,20,juce::Justification::centredLeft);
+  g.drawText("TRACK LOOP",690,paramY,112,20,juce::Justification::centredLeft);g.drawText("MASTER STEPS",690,paramY+26,112,20,juce::Justification::centredLeft);g.drawText("PATTERN",690,paramY+52,112,20,juce::Justification::centredLeft);g.drawText("CHANGE MODE",690,paramY+78,112,20,juce::Justification::centredLeft);
+  if(selected==11)g.drawText("NOTE",1040,paramY+78,60,20,juce::Justification::centredLeft);
+  static const char*gn[]={"COMPLEX","SYNCOP","HUMAN","CHAOS","KICK STAB","SNARE STAB","HAT ACT","PERC ACT"};for(int i=0;i<8;i++)g.drawText(gn[i],32+i*((getWidth()-64)/8),grooveY+105,(getWidth()-64)/8,18,juce::Justification::centred);
  int cur=p.engine.getTrackStep(selected);if(cur>=bank*16&&cur<bank*16+16){auto rr=steps[cur-bank*16].getBounds().toFloat().expanded(2);g.setColour(juce::Colour(0xffffc66a));g.drawRoundedRectangle(rr,4,2);}
  }
  if(page==1){
@@ -221,7 +222,12 @@ void JerzyDrumMachineAudioProcessorEditor::paint(juce::Graphics&g){
 }
 
 void JerzyDrumMachineAudioProcessorEditor::resized(){
- auto w=getWidth();auto h=getHeight();const int navX=w-718;seq.setBounds(navX,18,96,38);sound.setBounds(navX+100,18,96,38);mix.setBounds(navX+200,18,96,38);fxPage.setBounds(navX+300,18,82,38);drummer.setBounds(navX+386,18,112,38);songPage.setBounds(navX+504,18,88,38);run.setVisible(page==0||page==4);run.setBounds(navX+602,18,94,38);
+ auto w=getWidth();auto h=getHeight();
+ // Components are all registered with addAndMakeVisible in the constructor.
+ // Hide first so a newly opened editor can never show controls from every page.
+ for(int i=0;i<getNumChildComponents();++i)getChildComponent(i)->setVisible(false);
+ const int navX=w-718;seq.setVisible(true);sound.setVisible(true);mix.setVisible(true);fxPage.setVisible(true);drummer.setVisible(true);songPage.setVisible(true);
+ seq.setBounds(navX,18,96,38);sound.setBounds(navX+100,18,96,38);mix.setBounds(navX+200,18,96,38);fxPage.setBounds(navX+300,18,82,38);drummer.setBounds(navX+386,18,112,38);songPage.setBounds(navX+504,18,88,38);run.setVisible(page==0||page==4);run.setBounds(navX+602,18,94,38);
  bool isSeq=page==0,isSound=page==1,isMix=page==2,isFx=page==3,isDrummer=page==4,isSong=page==5;
  for(int i=0;i<12;i++){
   instruments[i].setVisible(isSeq||isSound);
@@ -231,9 +237,10 @@ void JerzyDrumMachineAudioProcessorEditor::resized(){
  for(int b=0;b<4;b++){banks[b].setVisible(isSeq);banks[b].setBounds(205+b*105,126,96,30);}
  int stepW=juce::jmax(38,(w-250)/16);int stepSize=juce::jmin(60,stepW-5);for(int s=0;s<16;s++){steps[s].setVisible(isSeq);steps[s].setBounds(202+s*stepW,172,stepSize,stepSize);}
  stepVelocity.setVisible(isSeq);stepProbability.setVisible(isSeq);stepRatchet.setVisible(isSeq);stepMicro.setVisible(isSeq);stepAccent.setVisible(isSeq);stepFlam.setVisible(isSeq);patternLength.setVisible(isSeq);patternSelect.setVisible(isSeq);changeMode.setVisible(isSeq);stepNote.setVisible(isSeq&&selected==11);
- stepVelocity.setBounds(300,536,250,22);stepProbability.setBounds(300,562,250,22);stepRatchet.setBounds(300,588,250,22);stepMicro.setBounds(300,614,250,22);stepAccent.setBounds(565,541,90,28);stepFlam.setBounds(565,580,90,28);trackLength.setVisible(isSeq);trackLength.setBounds(805,536,210,22);patternLength.setBounds(805,562,210,22);patternSelect.setBounds(805,588,235,26);changeMode.setBounds(805,614,235,26);stepNote.setBounds(1048,614,170,22);
- generate.setVisible(isSeq);mutate.setVisible(isSeq);fill.setVisible(isSeq);generate.setBounds(w-356,663,108,34);mutate.setBounds(w-240,663,100,34);fill.setBounds(w-132,663,88,34);
- int gw=(w-64)/8;for(int i=0;i<8;i++){genParam[i].setVisible(isSeq);genParam[i].setBounds(28+i*gw,681,gw,70);}
+ const int paramY=juce::jmax(395,h-283),grooveY=h-146;
+ stepVelocity.setBounds(300,paramY,250,22);stepProbability.setBounds(300,paramY+26,250,22);stepRatchet.setBounds(300,paramY+52,250,22);stepMicro.setBounds(300,paramY+78,250,22);stepAccent.setBounds(565,paramY+5,90,28);stepFlam.setBounds(565,paramY+48,90,28);trackLength.setVisible(isSeq);trackLength.setBounds(805,paramY,210,22);patternLength.setBounds(805,paramY+26,210,22);patternSelect.setBounds(805,paramY+52,235,26);changeMode.setBounds(805,paramY+78,235,26);stepNote.setBounds(1048,paramY+78,170,22);
+ generate.setVisible(isSeq);mutate.setVisible(isSeq);fill.setVisible(isSeq);generate.setBounds(w-356,grooveY+8,108,27);mutate.setBounds(w-240,grooveY+8,100,27);fill.setBounds(w-132,grooveY+8,88,27);
+ int gw=(w-64)/8;for(int i=0;i<8;i++){genParam[i].setVisible(isSeq);genParam[i].setBounds(28+i*gw,grooveY+34,gw,70);}
  drummerEnable.setVisible(isDrummer);drummerEnable.setBounds(44,205,190,38);drummerStyle.setVisible(isDrummer);hatDivision.setVisible(isDrummer);phraseLength.setVisible(isDrummer);drummerStyle.setBounds(100,272,160,34);hatDivision.setBounds(370,272,170,34);phraseLength.setBounds(640,272,160,34);
  for(int i=0;i<3;i++){drummerParam[i].setVisible(isDrummer);drummerParam[i].setBounds(84+i*215,285,170,105);}
  drummerFillEvery.setVisible(isDrummer);drummerBreakEvery.setVisible(isDrummer);artifactEnable.setVisible(isDrummer);artifactAmount.setVisible(isDrummer);artifactSeed.setVisible(isDrummer);randomizeSeed.setVisible(isDrummer);drummerFillEvery.setBounds(60,455,190,34);drummerBreakEvery.setBounds(280,455,190,34);artifactEnable.setBounds(520,455,175,34);randomizeSeed.setBounds(704,455,112,34);artifactAmount.setBounds(820,448,105,105);artifactSeed.setBounds(520,555,275,24);
@@ -253,4 +260,5 @@ void JerzyDrumMachineAudioProcessorEditor::resized(){
  reverbEnable.setVisible(isFx);delayEnable.setVisible(isFx);delayPingPong.setVisible(isFx);compressorEnable.setVisible(isFx);
  for(int i=0;i<14;i++){fxParam[(size_t)i].setVisible(isFx);const int knobW=(int)(cardW-28)/3;if(i<3)fxParam[(size_t)i].setBounds((int)c0+12+i*knobW,(int)cardY+138,knobW,132);else if(i<6)fxParam[(size_t)i].setBounds((int)c1+12+(i-3)*knobW,(int)cardY+138,knobW,132);else if(i==6||i==7||i==12){const int j=i==6?0:(i==7?1:2);fxParam[(size_t)i].setBounds((int)c2+12+j*knobW,(int)cardY+138,knobW,132);}else{const int compW=(int)(cardW-20)/5;fxParam[(size_t)i].setBounds((int)c2+10+(i-8)*compW,(int)cardY+318,compW,132);}}
  masterDrive.setVisible(isFx);masterDrive.setBounds((int)(c2+cardW*.5f-65), (int)(cardY+cardH-142),130,122);
+ saveKit.setVisible(isSound);loadKit.setVisible(isSound);
 }
