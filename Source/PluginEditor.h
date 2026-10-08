@@ -80,7 +80,7 @@ private:
  void attachSoundParameters();
  JerzyDrumMachineAudioProcessor&p; CopperLookAndFeel copper; int page=0,selected=0;
  juce::TextButton seq{"SEQ"},sound{"SOUND"},mix{"MIX"},fxPage{"FX"},drummer{"DRUMMER"},songPage{"SONG"},run{"RUN"},generate{"GENERATE"},mutate{"MUTATE"},fill{"FILL"};
- std::array<juce::TextButton,12> instruments; std::array<juce::TextButton,16> steps; std::array<juce::TextButton,4> banks;
+ std::array<juce::TextButton,12> instruments; std::array<juce::TextButton,16> steps; std::array<juce::TextButton,4> banks; juce::TextButton joinBanks{"JOIN BANKS → 64 STEPS"};
  juce::TextButton loadSample{"LOAD WAV"}; std::unique_ptr<juce::FileChooser> chooser; juce::ToggleButton showSynthKeyboard{"SHOW MIDI KEYBOARD"}; std::array<SynthKeyboardKey,24> synthKeys;
  std::array<juce::Slider,12> channelGain,channelPan,channelFilter,channelDrive,revSend,delSend; std::array<juce::TextButton,12> channelMute,channelSolo; juce::Slider masterDrive; std::array<juce::Slider,15> fxParam;
  juce::ToggleButton reverbEnable{"REVERB ON"},delayEnable{"DELAY ON"},delayPingPong{"PING-PONG"},compressorEnable{"COMP ON"};
