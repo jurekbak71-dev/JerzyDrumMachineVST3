@@ -50,6 +50,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
  p.push_back(std::make_unique<juce::AudioParameterFloat>("synth_osc2mix","Synth Oscillator Mix",0.0f,1.0f,.35f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("synth_detune","Synth Oscillator Detune cents",-50.0f,50.0f,7.0f));
  p.push_back(std::make_unique<juce::AudioParameterInt>("synth_octave","Synth Oscillator Octave",-2,2,0));
+ p.push_back(std::make_unique<juce::AudioParameterChoice>("synth_transpose","Synth Keyboard Octave",juce::StringArray{"-2 OCT","-1 OCT","0 OCT","+1 OCT","+2 OCT"},2));
+ p.push_back(std::make_unique<juce::AudioParameterChoice>("seq_division","Sequencer Division",juce::StringArray{"1/16","1/16 TRIPLET"},0));
  p.push_back(std::make_unique<juce::AudioParameterBool>("synth_filter","Synth Filter On",true));
  p.push_back(std::make_unique<juce::AudioParameterBool>("artifact_enable","Seed Randomize",false));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("artifact_amount","Artifact Amount",0.0f,1.0f,.25f));
@@ -63,8 +65,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
  p.push_back(std::make_unique<juce::AudioParameterFloat>("delay_mix","Delay Mix",0.0f,1.0f,0.45f));
  p.push_back(std::make_unique<juce::AudioParameterBool>("delay_on","Delay On",true));
  p.push_back(std::make_unique<juce::AudioParameterBool>("delay_pingpong","Delay Ping Pong",true));
- p.push_back(std::make_unique<juce::AudioParameterFloat>("master_bass","Master Bass",0.4f,1.8f,1.0f));
- p.push_back(std::make_unique<juce::AudioParameterFloat>("master_treble","Master Treble",0.4f,1.8f,1.0f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("master_bass","Isolator Low",0.0f,1.8f,1.0f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("master_mid","Isolator Mid",0.0f,1.8f,1.0f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("master_treble","Isolator High",0.0f,1.8f,1.0f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("master_comp","Master Compressor",0.6f,3.0f,1.35f));
  p.push_back(std::make_unique<juce::AudioParameterBool>("comp_on","Compressor On",true));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("comp_threshold","Compressor Threshold dB",-36.0f,0.0f,-18.0f));
@@ -91,7 +94,8 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  }
  engine.setReverb(param("rev_size"),param("rev_damp"),param("rev_mix"));engine.setReverbEnabled(param("reverb_on")>.5f);
  engine.setDelay(param("delay_beats"),param("delay_fb"),param("delay_mix"));engine.setDelayEnabled(param("delay_on")>.5f);engine.setDelayPingPong(param("delay_pingpong")>.5f);
- engine.setMaster(param("master_bass"),param("master_treble"),param("master_comp"));engine.setCompressor(param("comp_on")>.5f,param("comp_threshold"),param("comp_ratio"),param("comp_attack"),param("comp_release"));
+ engine.setMaster(param("master_bass"),param("master_mid"),param("master_treble"),param("master_comp"));
+ engine.setTripletSubdivision((int)param("seq_division")==1);engine.setSynthTranspose((int)param("synth_transpose")-2);engine.setCompressor(param("comp_on")>.5f,param("comp_threshold"),param("comp_ratio"),param("comp_attack"),param("comp_release"));
  engine.setCompressorBoost(param("comp_boost"));
  engine.configureSynth(param("synth_attack"),param("synth_decay"),param("synth_sustain"),param("synth_release"),param("synth_cutoff"),param("synth_resonance"),(int)param("synth_wave1"),(int)param("synth_wave2"),param("synth_osc2")>.5f,param("synth_osc2mix"),param("synth_detune"),(int)param("synth_octave"),param("synth_filter")>.5f);
  engine.setArtifactSettings(param("artifact_enable")>.5f,param("artifact_amount"),(uint32_t)param("artifact_seed"));
@@ -112,11 +116,11 @@ void JerzyDrumMachineAudioProcessor::syncParametersFromEngine(){
  for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";set(prefix+"gain",engine.gain[i]);set(prefix+"pan",engine.panorama[i]);set(prefix+"filter",engine.channelFilter[i]);set(prefix+"drive",engine.channelDrive[i]);set(prefix+"rev",engine.reverbSend[i]);set(prefix+"del",engine.delaySend[i]);set(prefix+"mute",engine.mute[i]?1.0f:0.0f);set(prefix+"solo",engine.solo[i]?1.0f:0.0f);set(voice+"tune",engine.getVoiceParam(i,0));set(voice+"decay",engine.getVoiceParam(i,1));set(voice+"tone",engine.getVoiceParam(i,2));set(voice+"character",engine.getVoiceParam(i,3));}
  set("rev_size",engine.reverbSize);set("rev_damp",engine.reverbDamping);set("rev_mix",engine.reverbMix);set("reverb_on",engine.reverbEnabled?1.0f:0.0f);
  set("delay_beats",engine.delayBeats);set("delay_fb",engine.delayFeedback);set("delay_mix",engine.delayMix);set("delay_on",engine.delayEnabled?1.0f:0.0f);set("delay_pingpong",engine.delayPingPong?1.0f:0.0f);
- set("master_bass",engine.masterBass);set("master_treble",engine.masterTreble);set("master_comp",engine.masterComp);
+ set("master_bass",engine.masterBass);set("master_mid",engine.masterMid);set("master_treble",engine.masterTreble);set("master_comp",engine.masterComp);
  set("comp_on",engine.compressorEnabled?1.0f:0.0f);set("comp_threshold",engine.compressorThresholdDb);set("comp_ratio",engine.compressorRatio);set("comp_attack",engine.compressorAttackMs);set("comp_release",engine.compressorReleaseMs);
  set("comp_boost",engine.compressorBoostDb);
  set("artifact_enable",engine.isSeedRandomizeEnabled()?1.0f:0.0f);set("artifact_amount",engine.getArtifactAmount());set("artifact_seed",(float)engine.getArtifactSeed());
- set("synth_attack",engine.synthAttackMs);set("synth_decay",engine.synthDecayMs);set("synth_sustain",engine.synthSustain);set("synth_release",engine.synthReleaseMs);set("synth_cutoff",engine.synthCutoff);set("synth_resonance",engine.synthResonance);set("synth_wave1",(float)engine.synthWave1);set("synth_wave2",(float)engine.synthWave2);set("synth_osc2",engine.synthOsc2?1.0f:0.0f);set("synth_osc2mix",engine.synthOsc2Mix);set("synth_detune",engine.synthDetuneCents);set("synth_octave",(float)engine.synthOctave2);set("synth_filter",engine.synthFilter?1.0f:0.0f);
+ set("synth_attack",engine.synthAttackMs);set("synth_decay",engine.synthDecayMs);set("synth_sustain",engine.synthSustain);set("synth_release",engine.synthReleaseMs);set("synth_cutoff",engine.synthCutoff);set("synth_resonance",engine.synthResonance);set("synth_wave1",(float)engine.synthWave1);set("synth_wave2",(float)engine.synthWave2);set("synth_osc2",engine.synthOsc2?1.0f:0.0f);set("synth_osc2mix",engine.synthOsc2Mix);set("synth_detune",engine.synthDetuneCents);set("synth_octave",(float)engine.synthOctave2);set("synth_transpose",(float)(engine.getSynthTranspose()+2));set("seq_division",engine.isTripletSubdivision()?1.0f:0.0f);set("synth_filter",engine.synthFilter?1.0f:0.0f);
 }
 juce::AudioProcessorEditor* JerzyDrumMachineAudioProcessor::createEditor(){return new JerzyDrumMachineAudioProcessorEditor(*this);}
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new JerzyDrumMachineAudioProcessor();}
