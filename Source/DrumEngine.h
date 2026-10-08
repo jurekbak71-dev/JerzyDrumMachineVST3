@@ -65,7 +65,7 @@ struct VoiceDSP {
   if(attackMs==a&&synthDecayMs==d&&sustain==s&&releaseMs==r&&cutoff==fc&&resonance==q&&wave1==w1&&wave2==w2&&osc2Enabled==second&&osc2Mix==mix&&detuneCents==cents&&octave2==oct&&filterEnabled==filter)return;
   attackMs=a;synthDecayMs=d;sustain=s;releaseMs=r;cutoff=fc;resonance=q;wave1=w1;wave2=w2;osc2Enabled=second;osc2Mix=mix;detuneCents=cents;octave2=oct;filterEnabled=filter;osc2Ratio=std::exp2((octave2*12.0+detuneCents/100.0)/12.0);rebuildSynthCoefficients();
  }
- void synthNoteOn(int note,float v){midiNote=juce::jlimit(0,127,note);synthBaseHz=440.0*std::exp2((midiNote-69)/12.0);velocity=juce::jlimit(0.0f,1.0f,v);stage=Stage::attack;phase=phase2=0;if(synthEnv<.001f)synthEnv=0;}
+ void synthNoteOn(int note,float v){kind=11;midiNote=juce::jlimit(0,127,note);synthBaseHz=440.0*std::exp2((midiNote-69)/12.0);velocity=juce::jlimit(0.0f,1.0f,v);stage=Stage::attack;phase=phase2=0;if(synthEnv<.001f)synthEnv=0;}
  void synthNoteOff(){if(stage!=Stage::off&&stage!=Stage::release)stage=Stage::release;}
  void trigger(float v,int k){kind=k;velocity=juce::jlimit(0.0f,1.0f,v);if(k==11){synthNoteOn(midiNote,v);return;}rebuildDrumCoefficients();env=1.0f;noiseEnv=1.0f;metalPhase=0;phase=phase2=phase3=0;noiseLow=noiseBand=resonator1=resonator2=0;}
  float advanceSynthEnvelope(){
