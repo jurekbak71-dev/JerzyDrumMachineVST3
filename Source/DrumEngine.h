@@ -163,7 +163,7 @@ public:
  void trigger(int i,float v){if(i>=0&&i<voices){if(i==11){dsp[11].synthNoteOn(dsp[11].midiNote,v);synthGateSamples=(int)(sr*60.0/bpm*.205);return;}if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){sampleVelocity[(size_t)(i-8)]=v;samples[(size_t)(i-8)].trigger();}else dsp[(size_t)i].trigger(v,i);}}
  void triggerSynthNote(int note,float velocity){const int pitched=juce::jlimit(0,127,note+12*synthTranspose);dsp[11].synthNoteOn(pitched,velocity);synthGateSamples=-1;}
  // GUI-originated note events are consumed on the audio thread to avoid racing VoiceDSP.
- void requestSynthNoteOn(int note,float velocity,int gateSamples=-1){enqueueSynthCommand({note,juce::jlimit(0.0f,1.0f,velocity),gateSamples,true});}
+ void requestSynthNoteOn(int note,float velocity,int gateSamples=-1){enqueueSynthCommand({note,gateSamples,juce::jlimit(0.0f,1.0f,velocity),true});}
  void previewSynthNote(int note,float velocity){requestSynthNoteOn(note,velocity,(int)(sr*.5));}
  void releaseSynthNote(int note){if(juce::jlimit(0,127,note+12*synthTranspose)==dsp[11].midiNote){dsp[11].synthNoteOff();synthGateSamples=0;}}
  void requestSynthNoteOff(int note){requestSynthCommandOff(note);}
