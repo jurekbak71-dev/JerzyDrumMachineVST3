@@ -70,6 +70,7 @@ class JerzyDrumMachineAudioProcessorEditor:public juce::AudioProcessorEditor,pri
 public:
  explicit JerzyDrumMachineAudioProcessorEditor(JerzyDrumMachineAudioProcessor&);
  ~JerzyDrumMachineAudioProcessorEditor() override;
+ void joinBanksTo64Steps();
  void paint(juce::Graphics&)override;
  void resized()override;
 private:

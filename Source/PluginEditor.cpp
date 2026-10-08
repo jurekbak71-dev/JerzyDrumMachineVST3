@@ -127,7 +127,7 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  stepNote.onChange=[this]{if(stepNote.getSelectedId()>0)p.engine.pattern(p.engine.getPattern()).step[selected][selectedStep].note=59+stepNote.getSelectedId();};
  changeMode.onChange=[this]{p.engine.setChangeMode((DrumEngine::ChangeMode)(changeMode.getSelectedId()-1));};
  patternLength.onValueChange=[this]{auto&pat=p.engine.pattern(p.engine.getPattern());const int oldLength=pat.length,newLength=(int)patternLength.getValue();pat.length=newLength;for(int v=0;v<DrumEngine::voices;v++)if(pat.trackLength[(size_t)v]==oldLength)pat.trackLength[(size_t)v]=newLength;trackLength.setValue(pat.trackLength[(size_t)selected],juce::dontSendNotification);};
- addAndMakeVisible(joinBanks);joinBanks.setComponentID("joinBanks64");joinBanks.setTooltip("Combines the four 16-step banks into one 64-step pattern.");joinBanks.onClick=[this]{auto&pat=p.engine.pattern(p.engine.getPattern());const int oldLength=pat.length;pat.length=64;for(int v=0;v<DrumEngine::voices;v++)if(pat.trackLength[(size_t)v]==oldLength)pat.trackLength[(size_t)v]=64;bank=0;for(int k=0;k<4;k++)banks[k].setToggleState(k==0,juce::dontSendNotification);patternLength.setValue(64,juce::dontSendNotification);trackLength.setValue(pat.trackLength[(size_t)selected],juce::dontSendNotification);syncVisibleSteps();repaint();};
+ addAndMakeVisible(joinBanks);joinBanks.setComponentID("joinBanks64");joinBanks.setTooltip("Combines the four 16-step banks into one 64-step pattern.");joinBanks.onClick=[this]{joinBanksTo64Steps();};
  patternSelect.onChange=[this]{p.engine.setPattern(patternSelect.getSelectedId()-1);patternLength.setValue(p.engine.pattern(p.engine.getPattern()).length,juce::dontSendNotification);syncVisibleSteps();syncStepControls();repaint();};
 
  for(int i=0;i<4;i++){addAndMakeVisible(soundParam[i]);soundParam[i].setRange(0,1,.01);soundParam[i].setValue(p.engine.getVoiceParam(selected,i));soundParam[i].setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);soundParam[i].setTextBoxStyle(juce::Slider::TextBoxBelow,false,56,18);soundParam[i].onValueChange=[this,i]{p.engine.setVoiceParam(selected,i,(float)soundParam[i].getValue());};}attachSoundParameters();
@@ -139,6 +139,8 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
 }
 
 JerzyDrumMachineAudioProcessorEditor::~JerzyDrumMachineAudioProcessorEditor(){setLookAndFeel(nullptr);}
+
+void JerzyDrumMachineAudioProcessorEditor::joinBanksTo64Steps(){auto&pat=p.engine.pattern(p.engine.getPattern());const int oldLength=pat.length;pat.length=64;for(int v=0;v<DrumEngine::voices;v++)if(pat.trackLength[(size_t)v]==oldLength)pat.trackLength[(size_t)v]=64;bank=0;for(int k=0;k<4;k++)banks[k].setToggleState(k==0,juce::dontSendNotification);patternLength.setValue(64,juce::dontSendNotification);trackLength.setValue(pat.trackLength[(size_t)selected],juce::dontSendNotification);syncVisibleSteps();repaint();}
 
 void JerzyDrumMachineAudioProcessorEditor::attachSoundParameters(){static const char* suffix[]={"tune","decay","tone","character"};for(int i=0;i<4;i++){soundAtt[i].reset();soundAtt[i]=std::make_unique<SliderAttachment>(p.apvts,"v"+juce::String(selected)+"_"+suffix[i],soundParam[i]);}}
 void JerzyDrumMachineAudioProcessorEditor::syncVisibleSteps(){for(int s=0;s<16;s++)steps[s].setToggleState(p.engine.pattern(p.engine.getPattern()).step[selected][bank*16+s].on,juce::dontSendNotification);}
