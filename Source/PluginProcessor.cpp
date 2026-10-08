@@ -69,6 +69,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
  p.push_back(std::make_unique<juce::AudioParameterFloat>("master_mid","Isolator Mid",0.0f,1.8f,1.0f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("master_treble","Isolator High",0.0f,1.8f,1.0f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("master_comp","Master Compressor",0.6f,3.0f,1.35f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("master_filter","Master DJ Filter",0.0f,1.0f,0.5f));
  p.push_back(std::make_unique<juce::AudioParameterBool>("comp_on","Compressor On",true));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("comp_threshold","Compressor Threshold dB",-36.0f,0.0f,-18.0f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("comp_ratio","Compressor Ratio",juce::NormalisableRange<float>(1.0f,20.0f),3.0f));
@@ -95,6 +96,7 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  engine.setReverb(param("rev_size"),param("rev_damp"),param("rev_mix"));engine.setReverbEnabled(param("reverb_on")>.5f);
  engine.setDelay(param("delay_beats"),param("delay_fb"),param("delay_mix"));engine.setDelayEnabled(param("delay_on")>.5f);engine.setDelayPingPong(param("delay_pingpong")>.5f);
  engine.setMaster(param("master_bass"),param("master_mid"),param("master_treble"),param("master_comp"));
+ engine.setMasterFilter(param("master_filter"));
  engine.setTripletSubdivision((int)param("seq_division")==1);engine.setSynthTranspose((int)param("synth_transpose")-2);engine.setCompressor(param("comp_on")>.5f,param("comp_threshold"),param("comp_ratio"),param("comp_attack"),param("comp_release"));
  engine.setCompressorBoost(param("comp_boost"));
  engine.configureSynth(param("synth_attack"),param("synth_decay"),param("synth_sustain"),param("synth_release"),param("synth_cutoff"),param("synth_resonance"),(int)param("synth_wave1"),(int)param("synth_wave2"),param("synth_osc2")>.5f,param("synth_osc2mix"),param("synth_detune"),(int)param("synth_octave"),param("synth_filter")>.5f);
@@ -117,6 +119,7 @@ void JerzyDrumMachineAudioProcessor::syncParametersFromEngine(){
  set("rev_size",engine.reverbSize);set("rev_damp",engine.reverbDamping);set("rev_mix",engine.reverbMix);set("reverb_on",engine.reverbEnabled?1.0f:0.0f);
  set("delay_beats",engine.delayBeats);set("delay_fb",engine.delayFeedback);set("delay_mix",engine.delayMix);set("delay_on",engine.delayEnabled?1.0f:0.0f);set("delay_pingpong",engine.delayPingPong?1.0f:0.0f);
  set("master_bass",engine.masterBass);set("master_mid",engine.masterMid);set("master_treble",engine.masterTreble);set("master_comp",engine.masterComp);
+ set("master_filter",engine.masterFilter);
  set("comp_on",engine.compressorEnabled?1.0f:0.0f);set("comp_threshold",engine.compressorThresholdDb);set("comp_ratio",engine.compressorRatio);set("comp_attack",engine.compressorAttackMs);set("comp_release",engine.compressorReleaseMs);
  set("comp_boost",engine.compressorBoostDb);
  set("artifact_enable",engine.isSeedRandomizeEnabled()?1.0f:0.0f);set("artifact_amount",engine.getArtifactAmount());set("artifact_seed",(float)engine.getArtifactSeed());

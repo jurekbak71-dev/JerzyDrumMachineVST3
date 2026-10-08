@@ -27,7 +27,7 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  instruments[0].setToggleState(true,juce::dontSendNotification);
 
  for(int b=0;b<4;b++){
-  static const char* bankRanges[]={"1–16","17–32","33–48","49–64"};banks[b].setButtonText(bankRanges[b]);banks[b].setClickingTogglesState(true);addAndMakeVisible(banks[b]);
+  static const char* bankRanges[]={"1-16","17-32","33-48","49-64"};banks[b].setButtonText(bankRanges[b]);banks[b].setClickingTogglesState(true);addAndMakeVisible(banks[b]);
   banks[b].onClick=[this,b]{bank=b;for(int k=0;k<4;k++)banks[k].setToggleState(k==bank,juce::dontSendNotification);syncVisibleSteps();repaint();};
  }
  banks[0].setToggleState(true,juce::dontSendNotification);
@@ -90,6 +90,7 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
   channelMute[i].onClick=[this,i]{p.engine.mute[i]=channelMute[i].getToggleState();};channelSolo[i].onClick=[this,i]{p.engine.solo[i]=channelSolo[i].getToggleState();};
  }
  addAndMakeVisible(masterDrive);masterDrive.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);masterDrive.setTextBoxStyle(juce::Slider::TextBoxBelow,false,62,18);masterDrive.setRange(.5,3,.01);masterDrive.setValue(p.engine.drive);masterDrive.onValueChange=[this]{p.engine.drive=(float)masterDrive.getValue();};
+ addAndMakeVisible(masterFilter);masterFilter.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);masterFilter.setTextBoxStyle(juce::Slider::TextBoxBelow,false,62,18);masterFilter.setRange(0.0,1.0,.001);masterFilter.setValue(p.engine.masterFilter);masterFilter.setTooltip("DJ filter: left is low-pass, centre is neutral, right is high-pass.");
  for(auto&s:fxParam){addAndMakeVisible(s);s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s.setTextBoxStyle(juce::Slider::TextBoxBelow,false,62,18);}
  reverbEnable.setClickingTogglesState(true);delayEnable.setClickingTogglesState(true);delayPingPong.setClickingTogglesState(true);compressorEnable.setClickingTogglesState(true);
  for(auto*b:{&reverbEnable,&delayEnable,&delayPingPong,&compressorEnable})addAndMakeVisible(*b);
@@ -108,6 +109,7 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  reverbEnable.onClick=[this]{p.engine.setReverbEnabled(reverbEnable.getToggleState());};delayEnable.onClick=[this]{p.engine.setDelayEnabled(delayEnable.getToggleState());};delayPingPong.onClick=[this]{p.engine.setDelayPingPong(delayPingPong.getToggleState());};
  for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";gainAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"gain",channelGain[i]);panAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"pan",channelPan[i]);filterAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"filter",channelFilter[i]);driveAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"drive",channelDrive[i]);revAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"rev",revSend[i]);delAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"del",delSend[i]);muteAtt[i]=std::make_unique<ButtonAttachment>(p.apvts,prefix+"mute",channelMute[i]);soloAtt[i]=std::make_unique<ButtonAttachment>(p.apvts,prefix+"solo",channelSolo[i]);}
  masterDriveAtt=std::make_unique<SliderAttachment>(p.apvts,"drive",masterDrive);
+ masterFilterAtt=std::make_unique<SliderAttachment>(p.apvts,"master_filter",masterFilter);
  static const char*fxIds[]={"rev_size","rev_damp","rev_mix","delay_beats","delay_fb","delay_mix","master_bass","master_treble","comp_threshold","comp_ratio","comp_attack","comp_release","master_comp","comp_boost","master_mid"};for(int i=0;i<15;i++)fxAtt[(size_t)i]=std::make_unique<SliderAttachment>(p.apvts,fxIds[i],fxParam[(size_t)i]);
  fxButtonAtt[0]=std::make_unique<ButtonAttachment>(p.apvts,"reverb_on",reverbEnable);fxButtonAtt[1]=std::make_unique<ButtonAttachment>(p.apvts,"delay_on",delayEnable);fxButtonAtt[2]=std::make_unique<ButtonAttachment>(p.apvts,"delay_pingpong",delayPingPong);fxButtonAtt[3]=std::make_unique<ButtonAttachment>(p.apvts,"comp_on",compressorEnable);
 
@@ -165,11 +167,11 @@ void JerzyDrumMachineAudioProcessorEditor::paint(juce::Graphics&g){
 
  if(page==0){
   const int paramY=juce::jmax(395,getHeight()-283),grooveY=getHeight()-146;
-  panel(g,{18,112,160.0f,(float)getHeight()-132});panel(g,{188,112,(float)getWidth()-206,382});panel(g,{188,(float)paramY-31,(float)getWidth()-206,138});panel(g,{18,(float)grooveY,(float)getWidth()-36,126});
+  panel(g,{18,112,160.0f,(float)getHeight()-132});panel(g,{188,112,(float)getWidth()-206,382});panel(g,{188,(float)paramY-31,(float)getWidth()-206,168});panel(g,{18,(float)grooveY,(float)getWidth()-36,126});
   g.setColour(juce::Colour(0xff9b6a43));g.setFont(11);g.drawText("INSTRUMENTS",30,120,130,18,juce::Justification::centredLeft);g.drawText("STEP PARAMETERS",204,paramY-25,140,18,juce::Justification::centredLeft);g.drawText("GENERATIVE GROOVE",34,grooveY+8,160,18,juce::Justification::centredLeft);
   static const char* labels[]={"VELOCITY","PROBABILITY","RATCHET","MICROTIMING"};for(int i=0;i<4;i++)g.drawText(labels[i],205,paramY+i*26,92,20,juce::Justification::centredLeft);
   g.drawText("TRACK LOOP",690,paramY,112,20,juce::Justification::centredLeft);g.drawText("MASTER STEPS",690,paramY+26,112,20,juce::Justification::centredLeft);g.drawText("PATTERN",690,paramY+52,112,20,juce::Justification::centredLeft);g.drawText("CHANGE MODE",690,paramY+78,112,20,juce::Justification::centredLeft);
-  if(selected==11)g.drawText("NOTE",1040,paramY+78,60,20,juce::Justification::centredLeft);
+  if(selected==11)g.drawText("NOTE",690,paramY+104,112,20,juce::Justification::centredLeft);
   static const char*gn[]={"COMPLEX","SYNCOP","HUMAN","CHAOS","KICK STAB","SNARE STAB","HAT ACT","PERC ACT"};for(int i=0;i<8;i++)g.drawText(gn[i],32+i*((getWidth()-64)/8),grooveY+105,(getWidth()-64)/8,18,juce::Justification::centred);
  int cur=p.engine.getTrackStep(selected);if(cur>=bank*16&&cur<bank*16+16){auto rr=steps[cur-bank*16].getBounds().toFloat().expanded(2);g.setColour(juce::Colour(0xffffc66a));g.drawRoundedRectangle(rr,4,2);}
  }
@@ -210,7 +212,7 @@ void JerzyDrumMachineAudioProcessorEditor::paint(juce::Graphics&g){
   const int knobW=(int)(cardW-28)/3;
   for(int i=0;i<3;i++){g.setColour(juce::Colour(0xffb89b78));g.setFont(10);g.drawText(revLabels[i],(int)c0+12+i*knobW,(int)cardY+120,knobW,18,juce::Justification::centred);g.drawText(delayLabels[i],(int)c1+12+i*knobW,(int)cardY+120,knobW,18,juce::Justification::centred);g.drawText(masterLabels[i],(int)c2+12+i*knobW,(int)cardY+120,knobW,18,juce::Justification::centred);}
   static const char* compLabels[]={"THRESHOLD dB","RATIO","ATTACK ms","RELEASE ms","COMP DRIVE","BOOST dB"};for(int i=0;i<6;i++){g.setColour(juce::Colour(0xffb89b78));g.setFont(9.0f);const int compW=(int)(cardW-20)/6;g.drawFittedText(compLabels[i],(int)c2+10+i*compW,(int)cardY+294,compW,24,juce::Justification::centred,2);}
-  g.setColour(juce::Colour(0xffb89b78));g.setFont(10);g.drawText("OUTPUT DRIVE",c2+cardW*.5f-70,cardY+cardH-160,140,18,juce::Justification::centred);
+  g.setColour(juce::Colour(0xffb89b78));g.setFont(10);g.drawText("OUTPUT DRIVE",c2+cardW*.21f,cardY+cardH-160,130,18,juce::Justification::centred);g.drawText("DJ FILTER · LP / OFF / HP",c2+cardW*.58f,cardY+cardH-160,150,18,juce::Justification::centred);
  }
  if(page==4){
   panel(g,{18,112,(float)getWidth()-36,(float)getHeight()-132});
@@ -245,7 +247,7 @@ void JerzyDrumMachineAudioProcessorEditor::resized(){
  int stepW=juce::jmax(38,(w-250)/16);int stepSize=juce::jmin(60,stepW-5);for(int s=0;s<16;s++){steps[s].setVisible(isSeq);steps[s].setBounds(202+s*stepW,172,stepSize,stepSize);}
  seqDivision.setVisible(isSeq);seqDivision.setBounds(665,126,170,30);joinBanks.setVisible(isSeq);joinBanks.setBounds(842,126,206,30);stepVelocity.setVisible(isSeq);stepProbability.setVisible(isSeq);stepRatchet.setVisible(isSeq);stepMicro.setVisible(isSeq);stepAccent.setVisible(isSeq);stepFlam.setVisible(isSeq);patternLength.setVisible(isSeq);patternSelect.setVisible(isSeq);changeMode.setVisible(isSeq);stepNote.setVisible(isSeq&&selected==11);
  const int paramY=juce::jmax(395,h-283),grooveY=h-146;
- stepVelocity.setBounds(300,paramY,250,22);stepProbability.setBounds(300,paramY+26,250,22);stepRatchet.setBounds(300,paramY+52,250,22);stepMicro.setBounds(300,paramY+78,250,22);stepAccent.setBounds(565,paramY+5,90,28);stepFlam.setBounds(565,paramY+48,90,28);trackLength.setVisible(isSeq);trackLength.setBounds(805,paramY,210,22);patternLength.setBounds(805,paramY+26,210,22);patternSelect.setBounds(805,paramY+52,235,26);changeMode.setBounds(805,paramY+78,235,26);stepNote.setBounds(1048,paramY+78,170,22);
+ stepVelocity.setBounds(300,paramY,250,22);stepProbability.setBounds(300,paramY+26,250,22);stepRatchet.setBounds(300,paramY+52,250,22);stepMicro.setBounds(300,paramY+78,250,22);stepAccent.setBounds(565,paramY+5,90,28);stepFlam.setBounds(565,paramY+48,90,28);trackLength.setVisible(isSeq);trackLength.setBounds(805,paramY,210,22);patternLength.setBounds(805,paramY+26,210,22);patternSelect.setBounds(805,paramY+52,235,26);changeMode.setBounds(805,paramY+78,235,26);stepNote.setBounds(805,paramY+104,235,26);
  generate.setVisible(isSeq);mutate.setVisible(isSeq);fill.setVisible(isSeq);generate.setBounds(w-356,grooveY+8,108,27);mutate.setBounds(w-240,grooveY+8,100,27);fill.setBounds(w-132,grooveY+8,88,27);
  int gw=(w-64)/8;for(int i=0;i<8;i++){genParam[i].setVisible(isSeq);genParam[i].setBounds(28+i*gw,grooveY+34,gw,70);}
  drummerEnable.setVisible(isDrummer);drummerEnable.setBounds(44,205,190,38);drummerStyle.setVisible(isDrummer);hatDivision.setVisible(isDrummer);phraseLength.setVisible(isDrummer);drummerStyle.setBounds(100,272,160,34);hatDivision.setBounds(370,272,170,34);phraseLength.setBounds(640,272,160,34);
@@ -266,6 +268,6 @@ void JerzyDrumMachineAudioProcessorEditor::resized(){
  const float cardY=148.0f,cardH=(float)h-166.0f,gap=14.0f,cardW=((float)w-56.0f-2.0f*gap)/3.0f,c0=28.0f,c1=c0+cardW+gap,c2=c1+cardW+gap;
  reverbEnable.setVisible(isFx);delayEnable.setVisible(isFx);delayPingPong.setVisible(isFx);compressorEnable.setVisible(isFx);
  for(int i=0;i<15;i++){fxParam[(size_t)i].setVisible(isFx);const int knobW=(int)(cardW-28)/3;if(i<3)fxParam[(size_t)i].setBounds((int)c0+12+i*knobW,(int)cardY+138,knobW,132);else if(i<6)fxParam[(size_t)i].setBounds((int)c1+12+(i-3)*knobW,(int)cardY+138,knobW,132);else if(i==6||i==7||i==14){const int j=i==6?0:(i==14?1:2);fxParam[(size_t)i].setBounds((int)c2+12+j*knobW,(int)cardY+138,knobW,132);}else{const int compW=(int)(cardW-20)/6;const int j=i<=11?i-8:(i==12?4:5);fxParam[(size_t)i].setBounds((int)c2+10+j*compW,(int)cardY+318,compW,132);}fxParam[(size_t)i].setTextBoxStyle(juce::Slider::TextBoxBelow,false,juce::jmax(36,fxParam[(size_t)i].getWidth()-6),18);}
- masterDrive.setVisible(isFx);masterDrive.setBounds((int)(c2+cardW*.5f-65), (int)(cardY+cardH-142),130,122);
+ masterDrive.setVisible(isFx);masterDrive.setBounds((int)(c2+cardW*.18f),(int)(cardY+cardH-142),120,122);masterFilter.setVisible(isFx);masterFilter.setBounds((int)(c2+cardW*.59f),(int)(cardY+cardH-142),120,122);
  saveKit.setVisible(isSound);loadKit.setVisible(isSound);
 }
