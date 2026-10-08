@@ -20,7 +20,7 @@ struct VoiceDSP {
  int kind=0,midiNote=60;
  // Dedicated mono synth section. Drum tuning never touches MIDI note pitch.
  float attackMs=8, synthDecayMs=180, sustain=.72f, releaseMs=140, cutoff=12000, resonance=.12f;
- float osc2Mix=.35f, detuneCents=7, filterG=0, filterK=1.7f, ic1eq=0, ic2eq=0;
+ float osc2Mix=.35f, detuneCents=7, filterG=0, filterK=1.7f, filterA1=1,filterA2=0,filterA3=0,ic1eq=0,ic2eq=0;
  double synthBaseHz=261.625565,osc2Ratio=1.004;
  int wave1=0,wave2=1,octave2=0; bool osc2Enabled=true,filterEnabled=true;
  Stage stage=Stage::off; float synthEnv=0, attackStep=0, decayCoeff=0, releaseCoeff=0;
@@ -58,6 +58,8 @@ struct VoiceDSP {
   const float fc=juce::jlimit(20.0f,safeSr*.45f,cutoff);
   filterG=std::tan(juce::MathConstants<float>::pi*fc/safeSr);
   filterK=2.0f-1.94f*juce::jlimit(0.0f,.98f,resonance);
+  const float inverseDenominator=1.0f/(1.0f+filterG*(filterG+filterK));
+  filterA1=inverseDenominator;filterA2=filterG*inverseDenominator;filterA3=filterG*filterA2;
  }
  void configureSynth(float a,float d,float s,float r,float fc,float q,int w1,int w2,bool second,float mix,float cents,int oct,bool filter){
   if(attackMs==a&&synthDecayMs==d&&sustain==s&&releaseMs==r&&cutoff==fc&&resonance==q&&wave1==w1&&wave2==w2&&osc2Enabled==second&&osc2Mix==mix&&detuneCents==cents&&octave2==oct&&filterEnabled==filter)return;
@@ -82,7 +84,7 @@ struct VoiceDSP {
   const float a=oscillator(wave1,phase,dt1),b=oscillator(wave2,phase2,dt2);
   phase+=dt1;phase-=std::floor(phase);phase2+=dt2;phase2-=std::floor(phase2);
   float x=osc2Enabled?a*(1.0f-osc2Mix)+b*osc2Mix:a;
-  if(filterEnabled){const float v3=x-filterK*ic1eq-ic2eq;const float v1=filterG*v3+ic1eq;const float v2=filterG*v1+ic2eq;ic1eq=2.0f*v1-ic1eq;ic2eq=2.0f*v2-ic2eq;x=v2;}
+  if(filterEnabled){const float v3=x-ic2eq;const float v1=filterA1*ic1eq+filterA2*v3;const float v2=ic2eq+filterA2*ic1eq+filterA3*v3;ic1eq=2.0f*v1-ic1eq;ic2eq=2.0f*v2-ic2eq;x=v2;}
   return std::tanh(x*amp*1.5f);
  }
  float process(){
