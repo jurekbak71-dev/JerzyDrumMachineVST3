@@ -15,7 +15,7 @@ struct SampleSlot { juce::AudioBuffer<float> audio; double sourceRate=44100.0,po
 struct VoiceDSP {
  enum class Stage : uint8_t { off, attack, decay, sustain, release };
  double sr=44100.0, phase=0, phase2=0, phase3=0;
- float env=0, noiseEnv=0, velocity=0, tune=.5f, decay=.5f, tone=.5f, character=.5f,openHatAttack=0,openHatAttackStep=0;
+ float env=0, noiseEnv=0, velocity=0, tune=.5f, decay=.5f, tone=.5f, character=.5f,extra1=.5f,extra2=.5f,openHatAttack=0,openHatAttackStep=0;
  float drumDecayCoeff=.999f, snareNoiseCoeff=.1f, snareWireCoeff=.999f;
  int kind=0,midiNote=60;
  // Dedicated mono synth section. Drum tuning never touches MIDI note pitch.
@@ -39,12 +39,17 @@ struct VoiceDSP {
   return sine(p);
  }
  float noise(){noiseState^=noiseState<<13;noiseState^=noiseState>>17;noiseState^=noiseState<<5;return (float)(noiseState>>8)*(1.0f/8388607.5f)-1.0f;}
- void prepare(double s){sr=s;openHatAttackStep=1.0f/(.003f*(float)s);rebuildSynthCoefficients();rebuildDrumCoefficients();}
+ void prepare(double s){sr=s;updateOpenHatAttack();rebuildSynthCoefficients();rebuildDrumCoefficients();}
+ void updateOpenHatAttack(){const float seconds=juce::jmap(extra1,0.00015f,.008f);openHatAttackStep=1.0f/juce::jmax(1.0f,seconds*(float)sr);}
  void rebuildDrumCoefficients(){
-  const float minSeconds[]={.045f,.035f,.06f,.012f,.025f,.22f,.04f,.025f};
-  const float maxSeconds[]={1.65f,.82f,1.9f,.20f,1.2f,1.8f,2.6f,1.5f};
+  const float minSeconds[]={.045f,.035f,.06f,.012f,.018f,.018f,.12f,.025f};
+  const float maxSeconds[]={1.65f,.82f,1.9f,.20f,.75f,.70f,1.9f,1.5f};
   const int k=juce::jlimit(0,7,kind);
-  const float seconds=juce::jmap(decay,0.0f,1.0f,minSeconds[k],maxSeconds[k]);
+  const float shaped=std::pow(juce::jlimit(0.0f,1.0f,decay),kind==3?1.75f:1.45f);
+  float seconds=juce::jmap(shaped,0.0f,1.0f,minSeconds[k],maxSeconds[k]);
+  if(kind==3)seconds=.0015f+.115f*std::pow(juce::jlimit(0.0f,1.0f,decay),1.85f);
+  if(kind==5)seconds=.004f+.48f*std::pow(juce::jlimit(0.0f,1.0f,decay),1.65f);
+  if(kind==6)seconds=.10f+1.65f*std::pow(juce::jlimit(0.0f,1.0f,decay),1.25f);
   drumDecayCoeff=std::exp(-1.0f/(seconds*(float)sr));
   snareNoiseCoeff=juce::jmap(tone,.012f,.24f);
   const float wireSeconds=juce::jmap(character,.08f,1.0f,.045f,.24f);
@@ -115,30 +120,33 @@ struct VoiceDSP {
     phase+=f1/sr;phase-=std::floor(phase);phase2+=f2/sr;phase2-=std::floor(phase2);
     x=sine(phase)*(1.0f-.32f*b)+sine(phase2)*(.12f+.46f*b);x=std::tanh(x*(1.0f+1.5f*c));break;
    }
-   case 3:{ // closed hat: bright, tightly damped metallic transient
-    f1=juce::jmap(t,3500.0f,10500.0f);phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.342/sr;phase2-=std::floor(phase2);phase3+=f1*1.731/sr;phase3-=std::floor(phase3);
-    noiseLow+=juce::jmap(b,.04f,.55f)*(n-noiseLow);const float hiss=n-noiseLow;
-    x=(sine(phase)+sine(phase2)*.72f+sine(phase3)*.48f)*(.12f+.38f*c)+hiss*(.16f+.72f*b);break;
+   case 3:{ // closed cymbal mesh: high-passed noise leads, short metal modes stay subdued
+    f1=juce::jmap(t,5200.0f,11200.0f);phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.342/sr;phase2-=std::floor(phase2);phase3+=f1*1.731/sr;phase3-=std::floor(phase3);metalPhase+=f1*2.119/sr;metalPhase-=std::floor(metalPhase);
+    noiseLow+=juce::jmap(b,.018f,.28f)*(n-noiseLow);const float hiss=n-noiseLow;noiseBand+=.3f*(hiss-noiseBand);
+    const float mesh=sine(phase)+.72f*sine(phase2)+.46f*sine(phase3)+.28f*sine(metalPhase);
+    x=noiseBand*juce::jmap(b,.62f,1.12f)+mesh*juce::jmap(c,.035f,.12f);break;
    }
-   case 4:{ // digital FM drum: carrier, modulator ratio and index are independent macros
-    f1=juce::jmap(t,55.0f,440.0f)*(1.0+pitchSweep*.5);f2=f1*juce::jmap(c,1.0f,5.0f);
-    phase+=f1/sr;phase-=std::floor(phase);phase2+=f2/sr;phase2-=std::floor(phase2);
-    x=sine(phase+sine(phase2)*juce::jmap(b,.015f,.32f));break;
+   case 4:{ // fused FM / wave-metal voice, shaped as a damped metallic percussion sound
+    f1=juce::jmap(t,1350.0f,6800.0f)*(1.0+pitchSweep*.16);f2=f1*juce::jmap(extra1,1.27f,2.83f);
+    phase+=f1/sr;phase-=std::floor(phase);phase2+=f2/sr;phase2-=std::floor(phase2);phase3+=f1*1.41421356/sr;phase3-=std::floor(phase3);metalPhase+=f1*2.2360679/sr;metalPhase-=std::floor(metalPhase);
+    noiseLow+=juce::jmap(b,.025f,.34f)*(n-noiseLow);const float hiss=n-noiseLow;
+    const float index=juce::jmap(c,.018f,.24f);const float fm=sine(phase+sine(phase2)*index);
+    const float modes=(fm*.52f+sine(phase3)*.29f+sine(metalPhase)*.19f);
+    x=modes*.30f+hiss*juce::jmap(extra2,.24f,.90f);break;
    }
-   case 5:{ // open hat: lower, less regular cymbal modes, broad filtered noise and a sustained wash
-    f1=juce::jmap(t,3000.0f,7600.0f);
-    phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.2937/sr;phase2-=std::floor(phase2);
-    phase3+=f1*1.5874/sr;phase3-=std::floor(phase3);metalPhase+=f1*2.1732/sr;metalPhase-=std::floor(metalPhase);
-    const float brightness=juce::jmap(b,.22f,1.15f);
-    noiseLow+=juce::jmap(b,.012f,.085f)*(n-noiseLow);
-    noiseBand+=.19f*((n-noiseLow)-noiseBand);
-    const float metallic=(sine(phase)+.83f*sine(phase2)+.62f*sine(phase3)+.41f*sine(metalPhase))*.20f;
-    x=metallic*(.18f+.82f*c)+noiseBand*brightness;
+   case 5:{ // open cymbal mesh: same noise/mode family as closed hat, with a controlled open wash
+    f1=juce::jmap(t,5000.0f,10600.0f);phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.342/sr;phase2-=std::floor(phase2);phase3+=f1*1.731/sr;phase3-=std::floor(phase3);metalPhase+=f1*2.119/sr;metalPhase-=std::floor(metalPhase);
+    noiseLow+=juce::jmap(b,.012f,.22f)*(n-noiseLow);const float hiss=n-noiseLow;noiseBand+=.21f*(hiss-noiseBand);
+    const float mesh=sine(phase)+.72f*sine(phase2)+.46f*sine(phase3)+.28f*sine(metalPhase);
+    const float metalMix=juce::jmap(extra2,.035f,.25f);
+    x=noiseBand*juce::jmap(b,.78f,1.2f)*(1.0f-metalMix)+mesh*metalMix;
     break;
    }
-   case 6:{ // wave metal: inharmonic oscillator bank, brightness and ring
-    f1=juce::jmap(t,110.0f,1500.0f);phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.41421356/sr;phase2-=std::floor(phase2);phase3+=f1*2.2360679/sr;phase3-=std::floor(phase3);
-    x=(sine(phase)*.55f+sine(phase2)*(.1f+.35f*b)+sine(phase3)*(.05f+.35f*c));break;
+   case 6:{ // floor tom: low shell, fast pitch fall and a soft beater transient
+    f1=juce::jmap(t,42.0f,152.0f)*(1.0+pitchSweep*juce::jmap(extra1,.08f,.62f));f2=f1*juce::jmap(b,1.38f,1.62f)*(1.0+c*.035f);
+    phase+=f1/sr;phase-=std::floor(phase);phase2+=f2/sr;phase2-=std::floor(phase2);
+    noiseLow+=.12f*(n-noiseLow);const float beater=(n-noiseLow)*std::exp(-((float)(1.0-env))*juce::jmap(extra2,24.0f,8.0f));
+    x=(sine(phase)*.82f+sine(phase2)*juce::jmap(b,.12f,.32f))*juce::jmap(c,.75f,1.22f)+beater*juce::jmap(extra2,.015f,.2f);x=std::tanh(x*(1.0f+1.8f*c));break;
    }
    case 7:{ // digital resonator: stable damped mode excited by a shaped noise transient
     f1=juce::jmap(t,180.0f,5200.0f);const float w=juce::MathConstants<float>::twoPi*(float)f1/(float)sr;
@@ -159,7 +167,7 @@ class DrumEngine {
 public:
  enum class ChangeMode{Immediate=0,NextBeat,NextBar,EndPattern};
  static constexpr int voices=12,patterns=32;
- DrumEngine(){trackStep.fill(-1);artifactRandom.setSeed((int64_t)artifactSeed);for(auto&patternIndex:audioSongPattern)patternIndex.store(0,std::memory_order_relaxed);for(auto&bars:audioSongBars)bars.store(4,std::memory_order_relaxed);}
+ DrumEngine(){trackStep.fill(-1);dsp[5].extra1=0.0f;dsp[5].extra2=.35f;dsp[6].extra1=.4f;dsp[6].extra2=.25f;artifactRandom.setSeed((int64_t)artifactSeed);for(auto&patternIndex:audioSongPattern)patternIndex.store(0,std::memory_order_relaxed);for(auto&bars:audioSongBars)bars.store(4,std::memory_order_relaxed);}
  void prepare(double s){sr=s;trackSamplesToStep.fill(0.0);for(auto&v:dsp)v.prepare(s);rebuildCompressorCoefficients();reverb.setSampleRate(s);juce::Reverb::Parameters rp;rp.roomSize=reverbSize;rp.damping=reverbDamping;rp.wetLevel=reverbEnabled?reverbMix:0.0f;rp.dryLevel=0.0f;rp.width=1.0f;reverb.setParameters(rp);delayL.assign((size_t)(s*2.0),0.f);delayR.assign((size_t)(s*2.0),0.f);initialiseFactoryPatterns();}
  void trigger(int i,float v){if(i>=0&&i<voices){if(i==11){dsp[11].synthNoteOn(dsp[11].midiNote,v);synthGateSamples=(int)(sr*60.0/bpm*.205);return;}if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){sampleVelocity[(size_t)(i-8)]=v;samples[(size_t)(i-8)].trigger();}else dsp[(size_t)i].trigger(v,i);}}
  void triggerSynthNote(int note,float velocity){const int pitched=juce::jlimit(0,127,note+12*synthTranspose);dsp[11].synthNoteOn(pitched,velocity);synthGateSamples=-1;synthPendingReleaseSamples=0;}
@@ -179,7 +187,7 @@ public:
  void setPattern(int p){current=juce::jlimit(0,patterns-1,p);step=-1;trackStep.fill(-1);trackSamplesToStep.fill(0.0);samplesToStep=0;hasPpq=false;}
  void setPreviewPlaying(bool shouldPlay){previewPlaying.store(shouldPlay,std::memory_order_relaxed);}
  void setVirtualDrummer(bool enabled){if(enabled==virtualDrummerEnabled)return;virtualDrummerEnabled=enabled;generatedBars=0;if(enabled){savedPattern=pattern(current);auto&p=pattern(current);p.length=juce::jmax(16,p.length);for(int v=0;v<voices;v++)p.trackLength[(size_t)v]=p.length;buildVirtualBar(0);}else pattern(current)=savedPattern;}
- void setVirtualDrummerSettings(int styleIn,int divisionIn,float energyIn,float humanizeIn,float syncopationIn,int phraseBarsIn,int fillEveryIn=4,int breakEveryIn=8,int kickDivisionIn=1){drummerStyle=juce::jlimit(0,4,styleIn);hatDivision=divisionIn==1?1:(divisionIn==2?2:4);drummerEnergy=juce::jlimit(0.f,1.f,energyIn);drummerSyncopation=juce::jlimit(0.f,1.f,syncopationIn);drummerHumanize=juce::jlimit(0.f,1.f,humanizeIn);phraseBars=juce::jlimit(1,16,phraseBarsIn);fillEveryBars=juce::jlimit(1,32,fillEveryIn);breakEveryBars=juce::jlimit(1,32,breakEveryIn);kickDivision=juce::jlimit(1,4,kickDivisionIn);if(virtualDrummerEnabled)buildVirtualBar(generatedBars);}
+ void setVirtualDrummerSettings(int styleIn,int divisionIn,float energyIn,float humanizeIn,float syncopationIn,int phraseBarsIn,int fillEveryIn=4,int breakEveryIn=8,int kickDivisionIn=1){drummerStyle=juce::jlimit(0,6,styleIn);hatDivision=divisionIn==1?1:(divisionIn==2?2:4);drummerEnergy=juce::jlimit(0.f,1.f,energyIn);drummerSyncopation=juce::jlimit(0.f,1.f,syncopationIn);drummerHumanize=juce::jlimit(0.f,1.f,humanizeIn);phraseBars=juce::jlimit(1,16,phraseBarsIn);fillEveryBars=juce::jlimit(1,32,fillEveryIn);breakEveryBars=juce::jlimit(1,32,breakEveryIn);kickDivision=1<<(juce::jlimit(1,4,kickDivisionIn)-1);if(virtualDrummerEnabled)buildVirtualBar(generatedBars);}
  bool isVirtualDrummerEnabled()const{return virtualDrummerEnabled;}
  static constexpr int maxSongEntries=16;
  int getSongLength()const{return songLength;}
@@ -211,14 +219,16 @@ public:
  bool isSeedRandomizeEnabled()const{return seedRandomize;}float getArtifactAmount()const{return artifactAmount;}uint32_t getArtifactSeed()const{return artifactSeed;}
  void setMaster(float bass,float mid,float treble,float comp){masterBass=juce::jlimit(0.f,1.8f,bass);masterMid=juce::jlimit(0.f,1.8f,mid);masterTreble=juce::jlimit(0.f,1.8f,treble);masterComp=juce::jlimit(.6f,3.0f,comp);}
  void setVoiceParam(int i,int param,float value){if(i<0||i>=voices)return;value=juce::jlimit(0.0f,1.0f,value);auto&v=dsp[(size_t)i];float*target=param==0?&v.tune:(param==1?&v.decay:(param==2?&v.tone:&v.character));if(std::abs(*target-value)>1.0e-5f){*target=value;if(param==1||param==2||param==3)v.rebuildDrumCoefficients();}if(i>=8&&i<=10){auto&s=samples[(size_t)(i-8)];if(param==0)s.pitch=juce::jmap(value,0.0f,1.0f,.5f,2.0f);else if(param==3)s.reverse=value>.75f;}}
+ void setVoiceExtraParam(int i,int param,float value){if((i!=4&&i!=5&&i!=6)||param<0||param>1)return;auto&v=dsp[(size_t)i];float&target=param==0?v.extra1:v.extra2;value=juce::jlimit(0.0f,1.0f,value);if(std::abs(target-value)>1.0e-5f){target=value;if(i==5&&param==0)v.updateOpenHatAttack();}}
+ float getVoiceExtraParam(int i,int param)const{if((i!=4&&i!=5&&i!=6)||param<0||param>1)return .5f;const auto&v=dsp[(size_t)i];return param==0?v.extra1:v.extra2;}
  float getVoiceParam(int i,int param)const{if(i<0||i>=voices)return .5f;auto const&v=dsp[(size_t)i];return param==0?v.tune:param==1?v.decay:param==2?v.tone:v.character;}
- juce::ValueTree saveState()const{juce::ValueTree root("ENGINE");root.setProperty("pattern",current,nullptr);root.setProperty("changeMode",(int)changeMode,nullptr);root.setProperty("masterBass",masterBass,nullptr);root.setProperty("masterMid",masterMid,nullptr);root.setProperty("masterTreble",masterTreble,nullptr);root.setProperty("masterComp",masterComp,nullptr);root.setProperty("masterFilter",masterFilter,nullptr);root.setProperty("tripletSubdivision",tripletSubdivision,nullptr);root.setProperty("drummerKickDivision",kickDivision,nullptr);root.setProperty("synthTranspose",synthTranspose,nullptr);root.setProperty("reverbSize",reverbSize,nullptr);root.setProperty("reverbDamping",reverbDamping,nullptr);root.setProperty("reverbMix",reverbMix,nullptr);root.setProperty("reverbEnabled",reverbEnabled,nullptr);root.setProperty("delayBeats",delayBeats,nullptr);root.setProperty("delayFeedback",delayFeedback,nullptr);root.setProperty("delayMix",delayMix,nullptr);root.setProperty("delayEnabled",delayEnabled,nullptr);root.setProperty("delayPingPong",delayPingPong,nullptr);root.setProperty("compressorEnabled",compressorEnabled,nullptr);root.setProperty("compressorThresholdDb",compressorThresholdDb,nullptr);root.setProperty("compressorRatio",compressorRatio,nullptr);root.setProperty("compressorAttackMs",compressorAttackMs,nullptr);root.setProperty("compressorReleaseMs",compressorReleaseMs,nullptr);root.setProperty("compressorBoostDb",compressorBoostDb,nullptr);root.setProperty("synthAttackMs",synthAttackMs,nullptr);root.setProperty("synthDecayMs",synthDecayMs,nullptr);root.setProperty("synthSustain",synthSustain,nullptr);root.setProperty("synthReleaseMs",synthReleaseMs,nullptr);root.setProperty("synthCutoff",synthCutoff,nullptr);root.setProperty("synthResonance",synthResonance,nullptr);root.setProperty("synthWave1",synthWave1,nullptr);root.setProperty("synthWave2",synthWave2,nullptr);root.setProperty("synthOsc2",synthOsc2,nullptr);root.setProperty("synthOsc2Mix",synthOsc2Mix,nullptr);root.setProperty("synthDetuneCents",synthDetuneCents,nullptr);root.setProperty("synthOctave2",synthOctave2,nullptr);root.setProperty("synthFilter",synthFilter,nullptr);root.setProperty("seedRandomize",seedRandomize,nullptr);root.setProperty("artifactAmount",artifactAmount,nullptr);root.setProperty("artifactSeed",(int64_t)artifactSeed,nullptr);for(int v=0;v<voices;v++){juce::ValueTree voice("VOICE");voice.setProperty("index",v,nullptr);if(v>=8&&v<=10)voice.setProperty("samplePath",samples[(size_t)(v-8)].sourcePath,nullptr);voice.setProperty("gain",gain[v],nullptr);voice.setProperty("pan",panorama[v],nullptr);voice.setProperty("rev",reverbSend[v],nullptr);voice.setProperty("del",delaySend[v],nullptr);voice.setProperty("filter",channelFilter[v],nullptr);voice.setProperty("drive",channelDrive[v],nullptr);voice.setProperty("mute",mute[v],nullptr);voice.setProperty("solo",solo[v],nullptr);voice.setProperty("tune",dsp[v].tune,nullptr);voice.setProperty("decay",dsp[v].decay,nullptr);voice.setProperty("tone",dsp[v].tone,nullptr);voice.setProperty("char",dsp[v].character,nullptr);root.addChild(voice,-1,nullptr);}for(int pidx=0;pidx<patterns;pidx++){juce::ValueTree pat("PATTERN");pat.setProperty("index",pidx,nullptr);pat.setProperty("length",pats[pidx].length,nullptr);for(int v=0;v<voices;v++){pat.setProperty("trackLength"+juce::String(v),pats[pidx].trackLength[(size_t)v],nullptr);pat.setProperty("trackTriplet"+juce::String(v),pats[pidx].trackTriplet[(size_t)v],nullptr);}for(int v=0;v<voices;v++)for(int s=0;s<64;s++){auto const&st=pats[pidx].step[v][s];if(st.on||st.velocity!=.85f||st.probability!=1.f||st.ratchet!=1||st.micro!=0.f||st.accent||st.flam||st.note!=60){juce::ValueTree n("STEP");n.setProperty("v",v,nullptr);n.setProperty("s",s,nullptr);n.setProperty("on",st.on,nullptr);n.setProperty("vel",st.velocity,nullptr);n.setProperty("prob",st.probability,nullptr);n.setProperty("rat",st.ratchet,nullptr);n.setProperty("micro",st.micro,nullptr);n.setProperty("accent",st.accent,nullptr);n.setProperty("flam",st.flam,nullptr);n.setProperty("note",st.note,nullptr);pat.addChild(n,-1,nullptr);}}root.addChild(pat,-1,nullptr);}juce::ValueTree song("SONG");song.setProperty("length",songLength,nullptr);for(int i=0;i<songLength;i++){juce::ValueTree entry("ENTRY");entry.setProperty("pattern",songChain[(size_t)i].pattern,nullptr);entry.setProperty("section",songChain[(size_t)i].section,nullptr);entry.setProperty("bars",songChain[(size_t)i].bars,nullptr);song.addChild(entry,-1,nullptr);}root.addChild(song,-1,nullptr);return root;}
+ juce::ValueTree saveState()const{juce::ValueTree root("ENGINE");root.setProperty("pattern",current,nullptr);root.setProperty("changeMode",(int)changeMode,nullptr);root.setProperty("masterBass",masterBass,nullptr);root.setProperty("masterMid",masterMid,nullptr);root.setProperty("masterTreble",masterTreble,nullptr);root.setProperty("masterComp",masterComp,nullptr);root.setProperty("masterFilter",masterFilter,nullptr);root.setProperty("tripletSubdivision",tripletSubdivision,nullptr);root.setProperty("drummerKickCount",kickDivision,nullptr);root.setProperty("synthTranspose",synthTranspose,nullptr);root.setProperty("reverbSize",reverbSize,nullptr);root.setProperty("reverbDamping",reverbDamping,nullptr);root.setProperty("reverbMix",reverbMix,nullptr);root.setProperty("reverbEnabled",reverbEnabled,nullptr);root.setProperty("delayBeats",delayBeats,nullptr);root.setProperty("delayFeedback",delayFeedback,nullptr);root.setProperty("delayMix",delayMix,nullptr);root.setProperty("delayEnabled",delayEnabled,nullptr);root.setProperty("delayPingPong",delayPingPong,nullptr);root.setProperty("compressorEnabled",compressorEnabled,nullptr);root.setProperty("compressorThresholdDb",compressorThresholdDb,nullptr);root.setProperty("compressorRatio",compressorRatio,nullptr);root.setProperty("compressorAttackMs",compressorAttackMs,nullptr);root.setProperty("compressorReleaseMs",compressorReleaseMs,nullptr);root.setProperty("compressorBoostDb",compressorBoostDb,nullptr);root.setProperty("synthAttackMs",synthAttackMs,nullptr);root.setProperty("synthDecayMs",synthDecayMs,nullptr);root.setProperty("synthSustain",synthSustain,nullptr);root.setProperty("synthReleaseMs",synthReleaseMs,nullptr);root.setProperty("synthCutoff",synthCutoff,nullptr);root.setProperty("synthResonance",synthResonance,nullptr);root.setProperty("synthWave1",synthWave1,nullptr);root.setProperty("synthWave2",synthWave2,nullptr);root.setProperty("synthOsc2",synthOsc2,nullptr);root.setProperty("synthOsc2Mix",synthOsc2Mix,nullptr);root.setProperty("synthDetuneCents",synthDetuneCents,nullptr);root.setProperty("synthOctave2",synthOctave2,nullptr);root.setProperty("synthFilter",synthFilter,nullptr);root.setProperty("seedRandomize",seedRandomize,nullptr);root.setProperty("artifactAmount",artifactAmount,nullptr);root.setProperty("artifactSeed",(int64_t)artifactSeed,nullptr);for(int v=0;v<voices;v++){juce::ValueTree voice("VOICE");voice.setProperty("index",v,nullptr);if(v>=8&&v<=10)voice.setProperty("samplePath",samples[(size_t)(v-8)].sourcePath,nullptr);voice.setProperty("gain",gain[v],nullptr);voice.setProperty("pan",panorama[v],nullptr);voice.setProperty("rev",reverbSend[v],nullptr);voice.setProperty("del",delaySend[v],nullptr);voice.setProperty("filter",channelFilter[v],nullptr);voice.setProperty("drive",channelDrive[v],nullptr);voice.setProperty("mute",mute[v],nullptr);voice.setProperty("solo",solo[v],nullptr);voice.setProperty("tune",dsp[v].tune,nullptr);voice.setProperty("decay",dsp[v].decay,nullptr);voice.setProperty("tone",dsp[v].tone,nullptr);voice.setProperty("char",dsp[v].character,nullptr);voice.setProperty("extra1",dsp[v].extra1,nullptr);voice.setProperty("extra2",dsp[v].extra2,nullptr);root.addChild(voice,-1,nullptr);}for(int pidx=0;pidx<patterns;pidx++){juce::ValueTree pat("PATTERN");pat.setProperty("index",pidx,nullptr);pat.setProperty("length",pats[pidx].length,nullptr);for(int v=0;v<voices;v++){pat.setProperty("trackLength"+juce::String(v),pats[pidx].trackLength[(size_t)v],nullptr);pat.setProperty("trackTriplet"+juce::String(v),pats[pidx].trackTriplet[(size_t)v],nullptr);}for(int v=0;v<voices;v++)for(int s=0;s<64;s++){auto const&st=pats[pidx].step[v][s];if(st.on||st.velocity!=.85f||st.probability!=1.f||st.ratchet!=1||st.micro!=0.f||st.accent||st.flam||st.note!=60){juce::ValueTree n("STEP");n.setProperty("v",v,nullptr);n.setProperty("s",s,nullptr);n.setProperty("on",st.on,nullptr);n.setProperty("vel",st.velocity,nullptr);n.setProperty("prob",st.probability,nullptr);n.setProperty("rat",st.ratchet,nullptr);n.setProperty("micro",st.micro,nullptr);n.setProperty("accent",st.accent,nullptr);n.setProperty("flam",st.flam,nullptr);n.setProperty("note",st.note,nullptr);pat.addChild(n,-1,nullptr);}}root.addChild(pat,-1,nullptr);}juce::ValueTree song("SONG");song.setProperty("length",songLength,nullptr);for(int i=0;i<songLength;i++){juce::ValueTree entry("ENTRY");entry.setProperty("pattern",songChain[(size_t)i].pattern,nullptr);entry.setProperty("section",songChain[(size_t)i].section,nullptr);entry.setProperty("bars",songChain[(size_t)i].bars,nullptr);song.addChild(entry,-1,nullptr);}root.addChild(song,-1,nullptr);return root;}
  void loadState(const juce::ValueTree& root)
  {
   if(!root.isValid())return;
   current=(int)root.getProperty("pattern",0);
   tripletSubdivision=(bool)root.getProperty("tripletSubdivision",false);
-  kickDivision=juce::jlimit(1,4,(int)root.getProperty("drummerKickDivision",1));
+  kickDivision=juce::jlimit(1,8,(int)root.getProperty("drummerKickCount",1<<(juce::jlimit(1,4,(int)root.getProperty("drummerKickDivision",1))-1)));
   changeMode=(ChangeMode)(int)root.getProperty("changeMode",(int)ChangeMode::EndPattern);
   masterBass=(float)root.getProperty("masterBass",1.0);
   masterMid=(float)root.getProperty("masterMid",1.0);
@@ -266,6 +276,9 @@ public:
     dsp[v].decay=(float)child.getProperty("decay",.5);
     dsp[v].tone=(float)child.getProperty("tone",.5);
     dsp[v].character=(float)child.getProperty("char",.5);
+    dsp[v].extra1=(float)child.getProperty("extra1",v==5?0.0:(v==6?.4:.5));
+    dsp[v].extra2=(float)child.getProperty("extra2",v==5?.35:(v==6?.25:.5));
+    if(v==5)dsp[v].updateOpenHatAttack();
     dsp[v].rebuildDrumCoefficients();
     if(v>=8&&v<=10)
     {
@@ -396,56 +409,46 @@ private:
   auto&p=pattern(current);const int barSteps=tripletSubdivision?24:16;const int start=(bar*barSteps)%juce::jmax(barSteps,p.length);const int phrase=bar%juce::jmax(1,phraseBars);
   const bool breakBar=((bar+1)%breakEveryBars)==0;
   const bool fillBar=!breakBar&&((bar+1)%fillEveryBars)==0;
-  // Phrase energy breathes gently while the style's kick and backbeat remain fixed.
-  const float phraseLift=(phrase<phraseBars/2?phrase:phraseBars-1-phrase);
-  const float energy=juce::jlimit(.1f,1.f,drummerEnergy+phraseLift*.025f);
-  const int kickEvery=juce::jmax(1,barSteps/(4*(1<<(kickDivision-1))));
+  const float energy=juce::jlimit(.1f,1.f,drummerEnergy+(float)phrase*.018f);
+  const int kickInterval=juce::jmax(1,(p.length+kickDivision-1)/kickDivision);
+  // Fixed, genre-specific score grids: humanization changes touch and timing, never the core notes.
+  static constexpr uint16_t snareMasks[]={0x1010,0x1010,0x9090,0x1010,0x1000,0x1010,0x1010};
+  static constexpr uint16_t ghostSnareMasks[]={0x0000,0x0000,0x0000,0x0808,0x0000,0x0000,0x0000};
   for(int i=0;i<barSteps;i++)for(int v=0;v<voices;v++){
-   const int s=(start+i)%p.length;auto&st=p.step[v][s];st.on=false;st.flam=false;st.ratchet=1;st.probability=1.f;st.micro=0.f;st.accent=false;
-   bool hit=false;
-   if(v==0){
-    // Kick division is independent of the selected style; each style may add
-    // syncopation around a steady beat grid.
-    hit=(i%kickEvery)==0;
-    if(drummerStyle==0&&drummerSyncopation>.65f&&energy>.55f&&i%kickEvery!=0&&(i==barSteps/2+2||i==barSteps-2))hit=true;
-    if(drummerStyle==2&&drummerSyncopation>.7f&&i==barSteps/2+2)hit=true;
-    if(drummerStyle==3&&drummerSyncopation>.55f&&i==barSteps/2+2)hit=true;
-    if(drummerStyle==4&&i%kickEvery!=0)hit=false;
-   }else if(v==1){
-    hit=tripletSubdivision?(i==6||i==18):(i==4||i==12);
-    if(drummerStyle==2&&i==barSteps-1&&drummerEnergy>.6f)hit=true;
-    if(drummerStyle==3&&i==barSteps-2&&drummerSyncopation>.65f)hit=true;
-    if(drummerStyle==4&&i==(tripletSubdivision?6:4))hit=false;
-   }else if(v==3){
-    const int hatEvery=tripletSubdivision?(hatDivision==1?6:(hatDivision==2?3:1)):hatDivision;
-    hit=(i%hatEvery==0);
-    if(drummerStyle==4&&i%(tripletSubdivision?6:4)!=0)hit=false;
-   }else if(v==4){
-    hit=((drummerStyle==2&&drummerSyncopation>.45f&&(i==7||i==15))||
-         (drummerStyle==3&&drummerSyncopation>.65f&&i==11));
-   }else if(v==5){
-    hit=tripletSubdivision?(i==9||i==21):(i==6||i==14);
+   const int s=(start+i)%p.length;const int grid=(i*16)/barSteps;auto&st=p.step[v][s];st.on=false;st.flam=false;st.ratchet=1;st.probability=1.f;st.micro=0.f;st.accent=false;
+   bool hit=false,ghost=false;float baseVelocity=.68f;
+   if(v==0){hit=(s%kickInterval)==0;baseVelocity=(s%juce::jmax(1,kickInterval*2)==0)?.96f:.80f;}
+   else if(v==1){hit=(snareMasks[drummerStyle]&(1u<<grid))!=0;ghost=(ghostSnareMasks[drummerStyle]&(1u<<grid))!=0&&drummerSyncopation>.12f;hit=hit||ghost;baseVelocity=ghost?juce::jmap(drummerSyncopation,.12f,1.0f,.25f,.48f):.88f;}
+   else if(v==3){
+    if(drummerStyle==4)hit=(grid%4)==0;
+    else if(drummerStyle==6)hit=(i%3)==0;
+    else if(drummerStyle==3)hit=true;
+    else hit=(grid%2)==0;
+    baseVelocity=(grid%4)==0?.78f:((grid%2)==0?.54f:.32f);
    }
-   // An explicit break drops the backbeat and leaves sparse time markers.
-   if(breakBar){hit=(v==3&&(i==0||i==(tripletSubdivision?12:8)))||(v==7&&i==barSteps-1);if(v==5)hit=false;}
-   // Fills are short and repeatable: two snare/tom answers, one restrained ratchet.
+   else if(v==4){hit=(drummerStyle==2&&(grid==10||grid==14))||(drummerStyle==3&&(grid==7||grid==15))||(drummerStyle==6&&(i%3==2));baseVelocity=.52f;}
+   else if(v==5){hit=(drummerStyle==1&&grid==14)||(drummerStyle==5&&(grid==6||grid==14))||(drummerStyle==6&&i%6==5);baseVelocity=.62f;}
+   else if(v==6){hit=(drummerStyle==2&&fillBar&&(grid==12||grid==15))||(drummerStyle==5&&grid==14);baseVelocity=.66f;}
+
+   if(breakBar){if(v==1||v==4||v==5||v==6)hit=false;if(v==3)hit=(drummerStyle==6?(i%6)==0:(grid%4)==0);}
    if(fillBar&&i>=barSteps-4){
-    if(v==1)hit=(i==barSteps-4||i==barSteps-1);
-    else if(v==2)hit=(i==barSteps-3||i==barSteps-2);
-    else if(v==3)hit=(i%2==0);
-    else if(v==4)hit=(i==barSteps-1);
-    else if(v==5)hit=(i==barSteps-2);
+    if(v==1){hit=(i==barSteps-4||i==barSteps-2||i==barSteps-1);baseVelocity=(i==barSteps-1)?.72f:.64f;}
+    else if(v==2){hit=(i==barSteps-3||i==barSteps-1);baseVelocity=.62f;}
+    else if(v==3){hit=(i%2)==0;baseVelocity=.46f;}
+    else if(v==6){hit=(i==barSteps-2);baseVelocity=.68f;}
    }
-   st.on=hit;
-   if(v==0&&kickDivision==4&&hit)st.ratchet=2;
-   const float accent=(i%4==0)?1.f:.78f;
-   const float velocityShape=1.0f+(energy-.5f)*.16f;
-   st.velocity=juce::jlimit(.25f,1.f,accent*velocityShape*(v==3?.72f:1.f));
-   st.micro=(i%2==1)?drummerHumanize*.035f:0.f;
-   st.accent=(i%4==0)&&v==0;
+   st.on=hit;if(!hit)continue;
+   const float accentBoost=(v==0&&s%kickInterval==0)?1.0f:(ghost?.68f:((grid%4)==0?1.0f:.86f));
+   const float velocityJitter=(random.nextFloat()-.5f)*.08f*drummerHumanize;
+   st.velocity=juce::jlimit(.2f,1.f,baseVelocity*accentBoost*(.9f+energy*.16f)+velocityJitter);
+   st.probability=ghost?juce::jlimit(.72f,1.f,.98f-drummerHumanize*.12f):1.f;
+   const bool offbeat=(grid&1)!=0;const float shuffleFeel=drummerStyle==6&&offbeat?.12f:0.f;
+   st.micro=juce::jlimit(0.f,.18f,shuffleFeel+offbeat*drummerHumanize*.025f);
+   st.accent=(v==0&&s%kickInterval==0)||(v==1&&!ghost);
    if(fillBar&&i==barSteps-1&&(v==1||v==2))st.ratchet=2;
   }
  }
+
  void advanceTrack(int v,double base){
   if(v<0||v>=voices)return;auto&p=pattern(current);const int len=juce::jlimit(1,64,p.trackLength[(size_t)v]);trackStep[(size_t)v]=(trackStep[(size_t)v]+1)%len;auto&st=p.step[v][(size_t)trackStep[(size_t)v]];
   if(st.on&&random.nextFloat()<=st.probability){const float velocity=juce::jlimit(0.f,1.f,st.velocity*(st.accent?1.18f:1.f));const int delaySamples=juce::jlimit(0,(int)(base*.45),(int)(juce::jlimit(0.0f,1.0f,st.micro)*base*.45));pendingRatchet[v]=st.ratchet>1?st.ratchet-1:0;ratchetInterval[v]=st.ratchet>1?juce::jmax(1,(int)(base/st.ratchet)):0;if(delaySamples>0){pendingMicro[v]=delaySamples;pendingVelocity[v]=velocity;pendingNote[v]=st.note;ratchetCounter[v]=0;}else{if(v==11){triggerSynthNote(st.note,velocity);synthGateSamples=(int)(base*.82);}else trigger(v,velocity);ratchetCounter[v]=ratchetInterval[v];}if(st.flam)pendingFlam[v]=juce::jmax(1,(int)(sr*.018));}

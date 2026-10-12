@@ -88,8 +88,8 @@ private:
  juce::ToggleButton reverbEnable{"REVERB ON"},delayEnable{"DELAY ON"},delayPingPong{"PING-PONG"},compressorEnable{"COMP ON"};
  using SliderAttachment=juce::AudioProcessorValueTreeState::SliderAttachment; using ButtonAttachment=juce::AudioProcessorValueTreeState::ButtonAttachment;
  std::array<std::unique_ptr<SliderAttachment>,12> gainAtt,panAtt,filterAtt,driveAtt,revAtt,delAtt; std::array<std::unique_ptr<ButtonAttachment>,12> muteAtt,soloAtt;
- std::array<std::unique_ptr<SliderAttachment>,4> soundAtt; std::array<std::unique_ptr<SliderAttachment>,15> fxAtt; std::array<std::unique_ptr<ButtonAttachment>,4> fxButtonAtt; std::unique_ptr<SliderAttachment> masterDriveAtt,masterFilterAtt;
- std::array<juce::Slider,4> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet;
+ std::array<std::unique_ptr<SliderAttachment>,6> soundAtt; std::array<std::unique_ptr<SliderAttachment>,15> fxAtt; std::array<std::unique_ptr<ButtonAttachment>,4> fxButtonAtt; std::unique_ptr<SliderAttachment> masterDriveAtt,masterFilterAtt;
+ std::array<juce::Slider,6> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet;
  juce::ToggleButton stepAccent{"ACCENT"},stepFlam{"FLAM"}; juce::Slider patternLength,stepMicro;
  juce::ComboBox patternSelect,changeMode,stepNote; std::array<juce::Slider,8> genParam;
  juce::ToggleButton drummerEnable{"AUTO DRUMMER"}; std::array<juce::ToggleButton,12> trackTripletButtons; std::array<juce::Slider,3> drummerParam; juce::ComboBox drummerStyle,hatDivision,phraseLength,kickDivision;
