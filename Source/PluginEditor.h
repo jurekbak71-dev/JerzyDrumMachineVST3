@@ -82,14 +82,14 @@ private:
  juce::File getKitDirectory() const;
  JerzyDrumMachineAudioProcessor&p; CopperLookAndFeel copper; int page=0,selected=0;
  juce::TextButton seq{"SEQ"},sound{"SOUND"},mix{"MIX"},fxPage{"FX"},drummer{"DRUMMER"},songPage{"SONG"},run{"RUN"},generate{"GENERATE"},mutate{"MUTATE"},fill{"FILL"};
- std::array<juce::TextButton,12> instruments; std::array<juce::TextButton,16> steps; std::array<juce::TextButton,4> banks; juce::TextButton joinBanks{"JOIN BANKS = 64 STEPS"};
+ std::array<juce::TextButton,12> instruments; std::array<juce::TextButton,16> steps; std::array<juce::TextButton,4> banks; juce::TextButton joinBanks{"JOIN BANKS = 64 STEPS"},clearSeq{"CLEAR SEQ"},stepSoundMode{"STEP SOUND: OFF"};
  juce::TextButton loadSample{"LOAD WAV"}; std::unique_ptr<juce::FileChooser> chooser; juce::ToggleButton showSynthKeyboard{"SHOW MIDI KEYBOARD"}; std::array<SynthKeyboardKey,24> synthKeys;
  std::array<juce::Slider,12> channelGain,channelPan,channelFilter,channelDrive,revSend,delSend; std::array<juce::TextButton,12> channelMute,channelSolo; juce::Slider masterDrive,masterFilter; std::array<juce::Slider,15> fxParam;
  juce::ToggleButton reverbEnable{"REVERB ON"},delayEnable{"DELAY ON"},delayPingPong{"PING-PONG"},compressorEnable{"COMP ON"};
  using SliderAttachment=juce::AudioProcessorValueTreeState::SliderAttachment; using ButtonAttachment=juce::AudioProcessorValueTreeState::ButtonAttachment;
  std::array<std::unique_ptr<SliderAttachment>,12> gainAtt,panAtt,filterAtt,driveAtt,revAtt,delAtt; std::array<std::unique_ptr<ButtonAttachment>,12> muteAtt,soloAtt;
  std::array<std::unique_ptr<SliderAttachment>,6> soundAtt; std::array<std::unique_ptr<SliderAttachment>,15> fxAtt; std::array<std::unique_ptr<ButtonAttachment>,4> fxButtonAtt; std::unique_ptr<SliderAttachment> masterDriveAtt,masterFilterAtt;
- std::array<juce::Slider,6> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet;
+ std::array<juce::Slider,6> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet; std::array<juce::Slider,4> stepSound; bool editingStepSound=false;
  juce::ToggleButton stepAccent{"ACCENT"},stepFlam{"FLAM"}; juce::Slider patternLength,stepMicro;
  juce::ComboBox patternSelect,changeMode,stepNote; std::array<juce::Slider,8> genParam;
  juce::ToggleButton drummerEnable{"AUTO DRUMMER"}; std::array<juce::ToggleButton,12> trackTripletButtons; std::array<juce::Slider,3> drummerParam; juce::ComboBox drummerStyle,hatDivision,phraseLength,kickDivision;
