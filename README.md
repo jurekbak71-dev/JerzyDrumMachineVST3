@@ -7,6 +7,8 @@
 - bezpośrednie granie 12 głosów nutami C2–B2 (36–47)
 - długość patternu 1–64 kroki oraz niezależna długość pętli 1–64 dla każdego instrumentu
 - host sync, fabryczna baza patternów, probability, velocity, ratchet, microtiming, accent i flam
+- per-step automatyzacja parametrów brzmienia dla każdego głosu; dla sampli pitch/decay/tone/reverse, a dla syntha ADSR
+- przycisk CLEAR SEQ do czyszczenia aktualnego patternu; hi-hat perkusisty z podziałem 1/4, 1/8 i 1/16
 - wirtualny perkusista z ewoluującą frazą, fillami i breakami w wybranych odstępach taktów
 - song chain z sekcjami intro/zwrotka/refren/bridge/break/outro i długością każdej sekcji
 - monofoniczny syntezator dual-oscillator z ADSR, filtrem i klawiaturą ekranową C3–B4; MIDI C4 = 261,626 Hz
