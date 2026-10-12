@@ -138,7 +138,7 @@ struct VoiceDSP {
     f1=juce::jmap(t,5000.0f,10600.0f);phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.342/sr;phase2-=std::floor(phase2);phase3+=f1*1.731/sr;phase3-=std::floor(phase3);metalPhase+=f1*2.119/sr;metalPhase-=std::floor(metalPhase);
     noiseLow+=juce::jmap(b,.012f,.22f)*(n-noiseLow);const float hiss=n-noiseLow;noiseBand+=.21f*(hiss-noiseBand);
     const float mesh=sine(phase)+.72f*sine(phase2)+.46f*sine(phase3)+.28f*sine(metalPhase);
-    const float metalMix=juce::jmap(extra2,.035f,.25f);
+    const float metalMix=juce::jlimit(.02f,.34f,juce::jmap(extra2,.035f,.25f)*juce::jmap(c,.68f,1.30f));
     x=noiseBand*juce::jmap(b,.78f,1.2f)*(1.0f-metalMix)+mesh*metalMix;
     break;
    }
