@@ -79,6 +79,7 @@ private:
  void syncVisibleSteps();
  void syncSongSlots();
  void attachSoundParameters();
+ juce::File getKitDirectory() const;
  JerzyDrumMachineAudioProcessor&p; CopperLookAndFeel copper; int page=0,selected=0;
  juce::TextButton seq{"SEQ"},sound{"SOUND"},mix{"MIX"},fxPage{"FX"},drummer{"DRUMMER"},songPage{"SONG"},run{"RUN"},generate{"GENERATE"},mutate{"MUTATE"},fill{"FILL"};
  std::array<juce::TextButton,12> instruments; std::array<juce::TextButton,16> steps; std::array<juce::TextButton,4> banks; juce::TextButton joinBanks{"JOIN BANKS = 64 STEPS"};
@@ -91,7 +92,7 @@ private:
  std::array<juce::Slider,4> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet;
  juce::ToggleButton stepAccent{"ACCENT"},stepFlam{"FLAM"}; juce::Slider patternLength,stepMicro;
  juce::ComboBox patternSelect,changeMode,stepNote; std::array<juce::Slider,8> genParam;
- juce::ToggleButton drummerEnable{"AUTO DRUMMER"}; std::array<juce::Slider,3> drummerParam; juce::ComboBox drummerStyle,hatDivision,phraseLength;
+ juce::ToggleButton drummerEnable{"AUTO DRUMMER"}; std::array<juce::ToggleButton,12> trackTripletButtons; std::array<juce::Slider,3> drummerParam; juce::ComboBox drummerStyle,hatDivision,phraseLength,kickDivision;
  std::array<juce::TextButton,16> songSlots; juce::ComboBox songPatternSelect,songSectionSelect; juce::TextButton songAdd{"ADD / UPDATE"},songRemove{"REMOVE SLOT"},songPlay{"PLAY SONG"}; int selectedSongSlot=0;
  juce::TextButton saveKit{"SAVE KIT"},loadKit{"LOAD KIT"}; std::unique_ptr<juce::FileChooser> kitChooser;
  juce::Slider trackLength,artifactAmount,artifactSeed; std::array<juce::Slider,8> synthParam;
