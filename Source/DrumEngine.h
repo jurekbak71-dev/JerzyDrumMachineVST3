@@ -411,7 +411,6 @@ private:
     if(drummerStyle==2&&drummerSyncopation>.7f&&i==barSteps/2+2)hit=true;
     if(drummerStyle==3&&drummerSyncopation>.55f&&i==barSteps/2+2)hit=true;
     if(drummerStyle==4&&i%kickEvery!=0)hit=false;
-   }
    }else if(v==1){
     hit=tripletSubdivision?(i==6||i==18):(i==4||i==12);
     if(drummerStyle==2&&i==barSteps-1&&drummerEnergy>.6f)hit=true;
