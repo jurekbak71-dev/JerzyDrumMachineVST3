@@ -419,12 +419,12 @@ private:
   static constexpr uint16_t snareMasks[]={0x1010,0x1010,0x9090,0x1010,0x1000,0x1010,0x1010};
   static constexpr uint16_t ghostSnareMasks[]={0x0000,0x0000,0x0000,0x0808,0x0000,0x0000,0x0000};
   for(int i=0;i<barSteps;i++)for(int v=0;v<voices;v++){
-   const int s=(start+i)%p.length;const int grid=(i*16)/barSteps;auto&st=p.step[v][s];st.on=false;st.flam=false;st.ratchet=1;st.probability=1.f;st.micro=0.f;st.accent=false;
+   const int s=(start+i)%p.length;const int grid=(i*16)/barSteps;const int hatGrid=grid;auto&st=p.step[v][s];st.on=false;st.flam=false;st.ratchet=1;st.probability=1.f;st.micro=0.f;st.accent=false;
    bool hit=false,ghost=false;float baseVelocity=.68f;
    if(v==0){hit=(s%kickInterval)==0;baseVelocity=(s%juce::jmax(1,kickInterval*2)==0)?.96f:.80f;}
    else if(v==1){hit=(snareMasks[drummerStyle]&(1u<<grid))!=0;ghost=(ghostSnareMasks[drummerStyle]&(1u<<grid))!=0&&drummerSyncopation>.12f;hit=hit||ghost;baseVelocity=ghost?juce::jmap(drummerSyncopation,.12f,1.0f,.25f,.48f):.88f;}
    else if(v==3){
-    const int hatGrid=(i*16)/barSteps;hit=(hatGrid%hatDivision)==0;
+    hit=(hatGrid%hatDivision)==0;
     baseVelocity=(grid%4)==0?.78f:((grid%2)==0?.54f:.32f);
    }
    else if(v==4){hit=(drummerStyle==2&&(grid==10||grid==14))||(drummerStyle==3&&(grid==7||grid==15))||(drummerStyle==6&&(i%3==2));baseVelocity=.52f;}
