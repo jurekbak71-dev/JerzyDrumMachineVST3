@@ -10,7 +10,32 @@ struct PatternStep { bool on=false; float velocity=.85f, probability=1.0f; int r
 struct Pattern { std::array<std::array<PatternStep,64>,12> step{}; std::array<int,12> trackLength{16,16,16,16,16,16,16,16,16,16,16,16}; std::array<bool,12> trackTriplet{}; int length=16; };
 struct SongEntry { int pattern=0,section=0,bars=4; };
 
-struct SampleSlot { juce::AudioBuffer<float> audio; double sourceRate=44100.0,pos=0.0; bool loaded=false,active=false,reverse=false,playbackReverse=false; juce::String sourcePath; float pitch=1.0f,level=1.0f,playbackPitch=1.0f; void trigger(float pitchOverride=-1.0f,int reverseOverride=-1){if(loaded){playbackPitch=pitchOverride>=0?pitchOverride:pitch;playbackReverse=reverseOverride<0?reverse:(reverseOverride!=0);active=true;pos=playbackReverse?(double)audio.getNumSamples()-1.0:0.0;}} float process(double outRate){if(!loaded||!active||audio.getNumSamples()<2)return 0;int i=juce::jlimit(0,audio.getNumSamples()-2,(int)pos);float frac=(float)(pos-i);float x=audio.getSample(0,i)*(1-frac)+audio.getSample(0,i+1)*frac;double inc=(sourceRate/outRate)*playbackPitch*(playbackReverse?-1.0:1.0);pos+=inc;if(pos<0||pos>=audio.getNumSamples()-1)active=false;return x*level;} };
+struct SampleSlot {
+ juce::AudioBuffer<float> audio;
+ double sourceRate=44100.0,pos=0.0,cachedRate=0.0;
+ bool loaded=false,active=false,reverse=false,playbackReverse=false,decayEnabled=false,toneEnabled=false;
+ juce::String sourcePath;
+ float pitch=1.0f,level=1.0f,playbackPitch=1.0f,playbackDecay=1.0f,playbackTone=1.0f,playbackDecayCoeff=1.0f,playbackEnvelope=1.0f,playbackToneAlpha=1.0f,toneState=0.0f;
+ void trigger(float pitchOverride=-1.0f,int reverseOverride=-1,float decayOverride=-1.0f,float toneOverride=-1.0f){
+  if(!loaded)return;
+  playbackPitch=pitchOverride>=0?pitchOverride:pitch;
+  playbackReverse=reverseOverride<0?reverse:(reverseOverride!=0);
+  decayEnabled=decayOverride>=0; toneEnabled=toneOverride>=0;
+  playbackDecay=decayOverride;playbackTone=toneOverride;playbackEnvelope=1.0f;toneState=0.0f;cachedRate=0.0;
+  active=true;pos=playbackReverse?(double)audio.getNumSamples()-1.0:0.0;
+ }
+ float process(double outRate){
+  if(!loaded||!active||audio.getNumSamples()<2)return 0.0f;
+  if(cachedRate!=outRate){cachedRate=outRate;if(decayEnabled)playbackDecayCoeff=std::exp(-1.0f/(juce::jmap(playbackDecay,0.0f,1.0f,.04f,8.0f)*(float)outRate));if(toneEnabled){const float cutoff=juce::jmap(playbackTone,0.0f,1.0f,500.0f,20000.0f);playbackToneAlpha=1.0f-std::exp(-juce::MathConstants<float>::twoPi*cutoff/(float)outRate);}}
+  const int i=juce::jlimit(0,audio.getNumSamples()-2,(int)pos);const float frac=(float)(pos-i);
+  float x=audio.getSample(0,i)*(1.0f-frac)+audio.getSample(0,i+1)*frac;
+  if(toneEnabled){toneState+=playbackToneAlpha*(x-toneState);x=toneState;}
+  if(decayEnabled){playbackEnvelope*=playbackDecayCoeff;x*=playbackEnvelope;}
+  pos+=(sourceRate/outRate)*playbackPitch*(playbackReverse?-1.0:1.0);
+  if(pos<0||pos>=audio.getNumSamples()-1)active=false;
+  return x*level;
+ }
+};
 
 struct VoiceDSP {
  enum class Stage : uint8_t { off, attack, decay, sustain, release };
@@ -171,7 +196,7 @@ public:
  static constexpr int voices=12,patterns=32;
  DrumEngine(){trackStep.fill(-1);dsp[5].extra1=0.0f;dsp[5].extra2=.35f;dsp[6].extra1=.4f;dsp[6].extra2=.25f;artifactRandom.setSeed((int64_t)artifactSeed);for(auto&patternIndex:audioSongPattern)patternIndex.store(0,std::memory_order_relaxed);for(auto&bars:audioSongBars)bars.store(4,std::memory_order_relaxed);}
  void prepare(double s){sr=s;trackSamplesToStep.fill(0.0);for(auto&v:dsp)v.prepare(s);rebuildCompressorCoefficients();reverb.setSampleRate(s);juce::Reverb::Parameters rp;rp.roomSize=reverbSize;rp.damping=reverbDamping;rp.wetLevel=reverbEnabled?reverbMix:0.0f;rp.dryLevel=0.0f;rp.width=1.0f;reverb.setParameters(rp);delayL.assign((size_t)(s*2.0),0.f);delayR.assign((size_t)(s*2.0),0.f);initialiseFactoryPatterns();}
- void triggerStep(int i,float v,int stepIndex){if(i<0||i>=voices)return;const auto& st=pattern(current).step[(size_t)i][(size_t)juce::jlimit(0,63,stepIndex)];if(i<8){dsp[(size_t)i].trigger(v,i,&st);return;}if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){const size_t slot=(size_t)(i-8);sampleVelocity[slot]=v;const auto& sample=samples[slot];const float pitch=(st.soundMask&1)?juce::jmap(st.sound[0],0.0f,1.0f,.5f,2.0f):sample.pitch;const int reverse=(st.soundMask&8)?(st.sound[3]>.75f?1:0):-1;samples[slot].trigger(pitch,reverse);return;}if(i==11){const int note=juce::jlimit(0,127,st.note+12*synthTranspose);dsp[11].synthNoteOn(note,v,&st);return;}trigger(i,v);}
+ void triggerStep(int i,float v,int stepIndex){if(i<0||i>=voices)return;const auto& st=pattern(current).step[(size_t)i][(size_t)juce::jlimit(0,63,stepIndex)];if(i<8){dsp[(size_t)i].trigger(v,i,&st);return;}if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){const size_t slot=(size_t)(i-8);sampleVelocity[slot]=v;const auto& sample=samples[slot];const float pitch=(st.soundMask&1)?juce::jmap(st.sound[0],0.0f,1.0f,.5f,2.0f):sample.pitch;const int reverse=(st.soundMask&8)?(st.sound[3]>.75f?1:0):-1;const float decay=(st.soundMask&2)?st.sound[1]:-1.0f;const float tone=(st.soundMask&4)?st.sound[2]:-1.0f;samples[slot].trigger(pitch,reverse,decay,tone);return;}if(i==11){const int note=juce::jlimit(0,127,st.note+12*synthTranspose);dsp[11].synthNoteOn(note,v,&st);return;}trigger(i,v);}
  void trigger(int i,float v){if(i>=0&&i<voices){if(i==11){dsp[11].synthNoteOn(dsp[11].midiNote,v);synthGateSamples=(int)(sr*60.0/bpm*.205);return;}if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){sampleVelocity[(size_t)(i-8)]=v;samples[(size_t)(i-8)].trigger();}else dsp[(size_t)i].trigger(v,i);}}
  void triggerSynthNote(int note,float velocity){const int pitched=juce::jlimit(0,127,note+12*synthTranspose);dsp[11].synthNoteOn(pitched,velocity);synthGateSamples=-1;synthPendingReleaseSamples=0;}
  // GUI-originated note events are consumed on the audio thread to avoid racing VoiceDSP.
