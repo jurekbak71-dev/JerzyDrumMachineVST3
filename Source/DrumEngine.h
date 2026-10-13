@@ -130,8 +130,8 @@ struct VoiceDSP {
     phase+=f1/sr;phase-=std::floor(phase);
     const float body=sine(phase),second=sine(phase*2.01);
     x=body*(.92f+.08f*b)+second*(.04f+.24f*c);
-    const float punch=std::exp(-(1.0f-env)*(4.0f+36.0f*c));
-    x=x*(.72f+.28f*punch)+(.12f+1.65f*c)*punch*sine(phase*3.0)*.38f;x=std::tanh(x*(.85f+5.0f*c));break;
+    const float punch=std::exp(-(1.0f-env)*(4.0f+36.0f*b));
+    x=x*(.72f+.28f*punch)+(.12f+1.65f*b)*punch*sine(phase*3.0)*.38f;x=std::tanh(x*(.85f+5.0f*c));break;
    }
    case 1:{ // snare: tuned shell + independently shaped, band-limited wire/noise spectrum
     f1=juce::jmap(t,150.0f,270.0f);f2=f1*1.47;
@@ -143,9 +143,9 @@ struct VoiceDSP {
     x*=.65f+.35f*std::exp(-((float)(1.0-env))*18.0f);break;
    }
    case 2:{ // dual-head tom: tunable shell and controlled head detune
-    f1=juce::jmap(t,58.0f,225.0f)*(1.0+pitchSweep*.16);f2=f1*std::exp2(juce::jmap(c,-38.0f,38.0f)/1200.0f);
+    f1=juce::jmap(t,58.0f,225.0f)*(1.0+pitchSweep*.16);f2=f1*std::exp2(juce::jmap(b,-38.0f,38.0f)/1200.0f);
     phase+=f1/sr;phase-=std::floor(phase);phase2+=f2/sr;phase2-=std::floor(phase2);
-    x=sine(phase)*(.7f-.2f*b)+sine(phase2)*(.38f+.38f*b);x=std::tanh(x*1.75f);break;
+    x=sine(phase)*(.7f-.2f*c)+sine(phase2)*(.38f+.38f*c);x=std::tanh(x*1.75f);break;
    }
    case 3:{ // closed cymbal mesh: high-passed noise leads, short metal modes stay subdued
     f1=juce::jmap(t,5200.0f,11200.0f);phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.342/sr;phase2-=std::floor(phase2);phase3+=f1*1.731/sr;phase3-=std::floor(phase3);metalPhase+=f1*2.119/sr;metalPhase-=std::floor(metalPhase);
