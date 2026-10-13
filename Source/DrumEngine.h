@@ -130,8 +130,8 @@ struct VoiceDSP {
     phase+=f1/sr;phase-=std::floor(phase);
     const float body=sine(phase),second=sine(phase*2.01);
     x=body*(.92f+.08f*b)+second*(.04f+.24f*c);
-    const float punch=std::exp(-((float)(1.0-env))* (5.0f+25.0f*(1.0f-c)));
-    x*=.78f+.22f*punch;x=std::tanh(x*(1.0f+3.8f*c));break;
+    const float punch=std::exp(-(1.0f-env)*(4.0f+36.0f*c));
+    x=x*(.72f+.28f*punch)+(.12f+1.65f*c)*punch*sine(phase*3.0)*.38f;x=std::tanh(x*(.85f+5.0f*c));break;
    }
    case 1:{ // snare: tuned shell + independently shaped, band-limited wire/noise spectrum
     f1=juce::jmap(t,150.0f,270.0f);f2=f1*1.47;
@@ -143,9 +143,9 @@ struct VoiceDSP {
     x*=.65f+.35f*std::exp(-((float)(1.0-env))*18.0f);break;
    }
    case 2:{ // dual-head tom: tunable shell and controlled head detune
-    f1=juce::jmap(t,58.0f,225.0f)*(1.0+pitchSweep*.16);f2=f1*(1.006+c*.065);
+    f1=juce::jmap(t,58.0f,225.0f)*(1.0+pitchSweep*.16);f2=f1*std::exp2(juce::jmap(c,-38.0f,38.0f)/1200.0f);
     phase+=f1/sr;phase-=std::floor(phase);phase2+=f2/sr;phase2-=std::floor(phase2);
-    x=sine(phase)*(1.0f-.32f*b)+sine(phase2)*(.12f+.46f*b);x=std::tanh(x*(1.0f+1.5f*c));break;
+    x=sine(phase)*(.7f-.2f*b)+sine(phase2)*(.38f+.38f*b);x=std::tanh(x*1.75f);break;
    }
    case 3:{ // closed cymbal mesh: high-passed noise leads, short metal modes stay subdued
     f1=juce::jmap(t,5200.0f,11200.0f);phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.342/sr;phase2-=std::floor(phase2);phase3+=f1*1.731/sr;phase3-=std::floor(phase3);metalPhase+=f1*2.119/sr;metalPhase-=std::floor(metalPhase);
@@ -163,10 +163,10 @@ struct VoiceDSP {
    }
    case 5:{ // open cymbal mesh: same noise/mode family as closed hat, with a controlled open wash
     f1=juce::jmap(t,5000.0f,10600.0f);phase+=f1/sr;phase-=std::floor(phase);phase2+=f1*1.342/sr;phase2-=std::floor(phase2);phase3+=f1*1.731/sr;phase3-=std::floor(phase3);metalPhase+=f1*2.119/sr;metalPhase-=std::floor(metalPhase);
-    noiseLow+=juce::jmap(b,.012f,.22f)*(n-noiseLow);const float hiss=n-noiseLow;noiseBand+=.21f*(hiss-noiseBand);
+    noiseLow+=juce::jmap(b,.008f,.65f)*(n-noiseLow);const float hiss=n-noiseLow;noiseBand+=juce::jmap(b,.06f,.86f)*(hiss-noiseBand);
     const float mesh=sine(phase)+.72f*sine(phase2)+.46f*sine(phase3)+.28f*sine(metalPhase);
     const float metalMix=juce::jlimit(.02f,.34f,juce::jmap(extra2,.035f,.25f)*juce::jmap(c,.68f,1.30f));
-    x=noiseBand*juce::jmap(b,.78f,1.2f)*(1.0f-metalMix)+mesh*metalMix;
+    x=(noiseBand*(.25f+1.6f*b)+hiss*juce::jmap(b,.05f,.95f))*(1.0f-metalMix)+mesh*metalMix;
     break;
    }
    case 6:{ // floor tom: low shell, fast pitch fall and a soft beater transient
@@ -478,7 +478,7 @@ private:
 
  void advanceTrack(int v,double base){
   if(v<0||v>=voices)return;auto&p=pattern(current);const int len=juce::jlimit(1,64,p.trackLength[(size_t)v]);trackStep[(size_t)v]=(trackStep[(size_t)v]+1)%len;auto&st=p.step[v][(size_t)trackStep[(size_t)v]];
-  if(st.on&&random.nextFloat()<=st.probability){const float velocity=juce::jlimit(0.f,1.f,st.velocity*(st.accent?1.18f:1.f));const int delaySamples=juce::jlimit(0,(int)(base*.45),(int)(juce::jlimit(0.0f,1.0f,st.micro)*base*.45));pendingRatchet[v]=st.ratchet>1?st.ratchet-1:0;ratchetInterval[v]=st.ratchet>1?juce::jmax(1,(int)(base/st.ratchet)):0;if(delaySamples>0){pendingMicro[v]=delaySamples;pendingVelocity[v]=velocity;pendingNote[v]=st.note;ratchetCounter[v]=0;}else{if(v==11){triggerStep(v,velocity,trackStep[(size_t)v]);synthGateSamples=(int)(base*.82);}else triggerStep(v,velocity,trackStep[(size_t)v]);ratchetCounter[v]=ratchetInterval[v];}pendingStep[(size_t)v]=trackStep[(size_t)v];if(st.flam)pendingFlam[v]=juce::jmax(1,(int)(sr*.018));}
+  if(st.on&&random.nextFloat()<=st.probability){const float velocity=juce::jlimit(0.f,1.f,st.velocity);const int delaySamples=juce::jlimit(0,(int)(base*.45),(int)(juce::jlimit(0.0f,1.0f,st.micro)*base*.45));pendingRatchet[v]=st.ratchet>1?st.ratchet-1:0;ratchetInterval[v]=st.ratchet>1?juce::jmax(1,(int)(base/st.ratchet)):0;if(delaySamples>0){pendingMicro[v]=delaySamples;pendingVelocity[v]=velocity;pendingNote[v]=st.note;ratchetCounter[v]=0;}else{if(v==11){triggerStep(v,velocity,trackStep[(size_t)v]);synthGateSamples=(int)(base*.82);}else triggerStep(v,velocity,trackStep[(size_t)v]);ratchetCounter[v]=ratchetInterval[v];}pendingStep[(size_t)v]=trackStep[(size_t)v];if(st.flam)pendingFlam[v]=juce::jmax(1,(int)(sr*.018));}
  }
  void applyRandomArtifact(float&l,float&r){if(!seedRandomize||artifactRemaining<=0)return;--artifactRemaining;const float wet=artifactWet;if(artifactMode==0){const float cut=artifactRemaining>0?0.0f:1.0f;l=l*(1.0f-wet+wet*cut);r=r*(1.0f-wet+wet*cut);}else if(artifactMode==1){if(--artifactCounter<=0){artifactCounter=artifactPeriod;artifactHoldL=l;artifactHoldR=r;}l=l*(1.0f-wet)+artifactHoldL*wet;r=r*(1.0f-wet)+artifactHoldR*wet;}else{l=l*(1.0f-wet)+std::round(l*artifactScale)/artifactScale*wet;r=r*(1.0f-wet)+std::round(r*artifactScale)/artifactScale*wet;}}
  void initialiseFactoryPatterns(){for(int q=0;q<patterns;q++){auto&p=pats[q];p.length=16;for(int s=0;s<16;s++){p.step[0][s].on=s%4==0;p.step[1][s].on=s==4||s==12;p.step[3][s].on=s%2==0;p.step[4][s].on=(q%2)&&s%4==2;p.step[7][s].on=(q%3==2)&&(s==7||s==15);}}}
