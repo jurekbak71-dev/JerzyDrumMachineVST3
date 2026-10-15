@@ -69,6 +69,57 @@ int main()
   bool joinedBanks=false;for(int i=0;i<editor->getNumChildComponents();++i)if(auto*button=dynamic_cast<juce::Button*>(editor->getChildComponent(i));button&&button->getComponentID()=="joinBanks64"){joinedBanks=true;break;}if(auto*editorView=dynamic_cast<JerzyDrumMachineAudioProcessorEditor*>(editor.get()))editorView->joinBanksTo64Steps();else joinedBanks=false;if(!joinedBanks||processor->engine.pattern(0).length!=64){log("FAIL: GUI bank join did not make a 64-step pattern");return 21;}for(int v=0;v<DrumEngine::voices;v++)if(processor->engine.pattern(0).trackLength[(size_t)v]!=64){log("FAIL: joined 64-step pattern did not extend default instrument tracks");return 22;}
   for(const auto*pageName:{"SEQ","SOUND","MIX","FX","DRUMMER","SONG"}){bool clicked=false;for(int i=0;i<editor->getNumChildComponents();++i)if(auto*button=dynamic_cast<juce::Button*>(editor->getChildComponent(i));button&&button->getButtonText()==pageName){button->triggerClick();clicked=true;break;}if(!clicked||visibleChildren()>100){log("FAIL: page navigation exposed overlapping layouts");return 16;}}
   auto auditionProcessor=std::make_unique<JerzyDrumMachineAudioProcessor>();auditionProcessor->prepareToPlay(48000.0,512);std::unique_ptr<juce::AudioProcessorEditor> auditionEditor(auditionProcessor->createEditor());bool synthClicked=false;for(int i=0;i<auditionEditor->getNumChildComponents();++i)if(auto*button=dynamic_cast<juce::Button*>(auditionEditor->getChildComponent(i));button&&button->getButtonText()=="SYNTH"){button->triggerClick();synthClicked=true;break;}if(!synthClicked){log("FAIL: could not click synth preview in the editor");return 23;}juce::AudioBuffer<float> auditionAudio(2,512);juce::MidiBuffer noMidi;double auditionEnergy=0;for(int block=0;block<48;block++){auditionProcessor->processBlock(auditionAudio,noMidi);for(int c=0;c<2;c++)for(int i=0;i<auditionAudio.getNumSamples();i++)auditionEnergy+=std::abs(auditionAudio.getSample(c,i));}if(auditionEnergy<1.0){log("FAIL: synth GUI audition produced no plug-in output");return 24;}
+  // Bank copy MUST paste only a bank, not replace a 64-step track.
+  {
+    auto seq=std::make_unique<DrumEngine>();seq->prepare(48000.0);
+    auto& p=seq->pattern(0);
+    p.step[0][0].on=true;p.step[0][2].on=true;p.step[0][2].ratchet=3;
+    p.step[0][18].on=false;p.step[0][32].on=true;
+    const auto copy=seq->copyBank(0,0,0);
+    if(!seq->pasteBank(0,0,1,copy) || !p.step[0][16].on ||
+       !p.step[0][18].on||p.step[0][18].ratchet!=3||
+       !p.step[0][32].on||p.trackLength[0]<32){log("FAIL: COPY 1-16 to 17-32 lost data");return 50;}
+    p.step[1][0].on=true;
+    seq->clearVoice(0);
+    if(p.step[0][0].on||p.step[0][18].on||!p.step[1][0].on){
+        log("FAIL: CLEAR TRACK deleted another instrument or left notes");return 51;
+    }
+    seq->clearSequence();
+    if(p.step[1][0].on){log("FAIL: CLEAR ALL leaves active drum");return 52;}
+  }
+  // Stereo FX must produce finite sound and audible modulation without
+  // audio-thread allocation (all buffers are allocated by prepare).
+  {
+    DrumExtendedFX fx;fx.prepare(48000.0);
+    double energy=0,stereoDifference=0,tapeEnergy=0;
+    for(int k=0;k<24000;k++){
+        const float x=(float)(.18*std::sin(juce::MathConstants<double>::twoPi*330.0*k/48000.0));
+        const auto c=fx.chorus(x,x,.8f,.95f);
+        const auto t=fx.tape(x,x,.8f,.6f,.42f);
+        for(auto y:{c[0],c[1],t[0],t[1]})if(!std::isfinite(y)||std::abs(y)>8.0f){
+            log("FAIL: Chorus/Tape FX produced non-finite or unbounded output");return 53;
+        }
+        energy+=std::abs(c[0])+std::abs(c[1]);
+        stereoDifference+=std::abs(c[0]-c[1]);
+        tapeEnergy+=std::abs(t[0])+std::abs(t[1]);
+    }
+    if(energy<10.0||stereoDifference<.1||tapeEnergy<10.0){
+        log("FAIL: Chorus width or Tape transport returned silence");return 54;
+    }
+  }
+  {
+    auto fxSeq=std::make_unique<DrumEngine>();fxSeq->prepare(48000.0);
+    fxSeq->delaySend[0]=1.f;fxSeq->setDelay(.25f,.8f,.7f);fxSeq->setDelayEnabled(true);
+    for(int mode=0;mode<5;++mode){
+        fxSeq->setDelayMode(mode);fxSeq->trigger(0,.9f);
+        juce::AudioBuffer<float> audio(2,4096);
+        for(int block=0;block<12;++block){
+            fxSeq->process(audio);
+            for(int c=0;c<2;++c)for(int i=0;i<4096;++i)
+                if(!std::isfinite(audio.getSample(c,i))){log("FAIL: Delay mode not finite");return 55;}
+        }
+    }
+  }
   // MIDI interoperability must preserve existing independent grid choices,
   // velocity and pitched synth note data without mutating a saved kit.
   {
