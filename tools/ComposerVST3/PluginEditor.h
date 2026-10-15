@@ -28,6 +28,7 @@ private:
     std::vector<std::unique_ptr<Choice>> choices;
     std::vector<std::unique_ptr<Control>> controls;
     juce::ToggleButton enabled;
+    std::unique_ptr<ButtonAttachment> enabledAttachment;
     juce::TextButton newIdea;
     juce::Label instructions;
     void addChoice(const char* param, const juce::String& title,
