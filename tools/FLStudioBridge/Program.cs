@@ -109,13 +109,13 @@ internal sealed class BridgeWindow : Form {
         p.Controls.Add(Expl("W każdej ścieżce można ustawić inną liczbę kroków w takcie.\nPrzykład: KICK 5 uderzeń / 16 kroków, CH 11 uderzeń / 24 kroki.",325));
     }
     void FileTab(Panel p){
-        var j2m=Action("ZAMIENIAM JPF → MIDI",24,35,350);p.Controls.Add(j2m);
+        var j2m=Action("KONWERTUJ JPF → MIDI",24,35,350);p.Controls.Add(j2m);
         j2m.Click+=(_,_)=>{
             var source=Open("Jerzy Pattern (*.jpf.json;*.json)|*.jpf.json;*.json");if(source is null)return;
             var dest=Save("MIDI (*.mid)|*.mid",Path.GetFileNameWithoutExtension(source)+".mid");if(dest is null)return;
             Execute(()=>Music.ToMidi(Music.Load(source),dest),"Zapisano plik MIDI: "+dest);
         };
-        var m2j=Action("ZAMIENIAM MIDI → JPF",24,100,350);p.Controls.Add(m2j);
+        var m2j=Action("KONWERTUJ MIDI → JPF",24,100,350);p.Controls.Add(m2j);
         m2j.Click+=(_,_)=>{
             var source=Open("MIDI (*.mid;*.midi)|*.mid;*.midi");if(source is null)return;
             var dest=Save("Jerzy Pattern (*.jpf.json)|*.jpf.json",Path.GetFileNameWithoutExtension(source)+".jpf.json");if(dest is null)return;
@@ -153,16 +153,16 @@ internal sealed class BridgeWindow : Form {
             Directory.CreateDirectory(folder.Text);
             var asm=Assembly.GetExecutingAssembly();
             var resourceNames=asm.GetManifestResourceNames().Where(x=>x.StartsWith("Scripts.")&&x.EndsWith(".pyscript")).ToArray();
-            if(resourceNames.Length!=4)throw new InvalidOperationException("W aplikacji brakuje skryptów Piano Roll.");
+            if(resourceNames.Length!=5)throw new InvalidOperationException("W aplikacji brakuje kompletu 5 skryptów Piano Roll.");
             foreach(var name in resourceNames){
                 using var input=asm.GetManifestResourceStream(name)??throw new FileNotFoundException(name);
                 using var output=File.Create(Path.Combine(folder.Text,name["Scripts.".Length..]));
                 input.CopyTo(output);
             }
-        },"Zainstalowano 4 skrypty. Uruchom ponownie FL Studio i otwórz Piano Roll → Tools → Scripts.");
+        },"Zainstalowano 5 skryptów. Uruchom ponownie FL Studio i otwórz Piano Roll → Tools → Scripts.");
         var open=Action("OTWÓRZ FOLDER SKRYPTÓW",24,355,320);p.Controls.Add(open);
         open.Click+=(_,_)=>Execute(()=>{Directory.CreateDirectory(folder.Text);Process.Start(new ProcessStartInfo("explorer.exe",'"'+folder.Text+'"'){UseShellExecute=true});},"Otwarto folder skryptów.");
-        p.Controls.Add(Expl("Dostępne: Jerzy Groove Triplets, Jerzy Arp Chords, Jerzy Import JPF, Jerzy Export JPF.\nJeżeli masz niestandardowy folder danych FL Studio, wybierz go przyciskiem powyżej.",445));
+        p.Controls.Add(Expl("Dostępne: Jerzy Composer Piano Roll, Groove Triplets, Arp Chords, Import JPF, Export JPF.\nJeżeli masz niestandardowy folder danych FL Studio, wybierz go przyciskiem powyżej.",445));
     }
     void DoctorTab(Panel p){
         p.Controls.Add(TextLabel("Podstawowa analiza nagłówka projektu FL Studio (.flp)",24,30,750));
