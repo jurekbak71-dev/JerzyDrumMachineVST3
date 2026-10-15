@@ -1,0 +1,108 @@
+"""Jerzy Composer - native FL Studio Piano Roll generator.
+Runs inside FL Studio with its built-in Python; no external Python installation.
+All changes are made through the official flpianoroll score API.
+"""
+import random
+import flpianoroll as flp
+
+MODES = ['Drums', 'Bass', 'Chords', 'Arp', 'Generative melody']
+STYLES = ['Rock', 'Dub', 'Acid', 'Funk', 'Ambient']
+DIVISIONS = ['1/8', '1/16', '1/16 triplet', '1/32']
+SCALES = ['Minor', 'Major', 'Dorian', 'Pentatonic']
+SCALE_MAP = [[0,2,3,5,7,8,10],[0,2,4,5,7,9,11],[0,2,3,5,7,9,10],[0,3,5,7,10]]
+BASS_STYLES = [
+    [0,0,0,4,0,0,2,0,0,0,4,0,0,2,4,6],
+    [0,0,4,4,0,0,4,0,0,0,4,4,0,2,4,0],
+    [0,2,4,0,2,4,6,2,0,4,2,0,6,0,4,2],
+    [0,0,4,0,2,0,0,6,0,4,2,0,0,6,4,2],
+    [0,0,0,4,0,0,0,0,0,0,2,0,0,0,4,0]
+]
+
+def createDialog():
+    form = flp.ScriptDialog('JERZY COMPOSER', 'Create notes directly in FL Studio Piano Roll.')
+    form.addInputCombo('Mode', MODES, 0)
+    form.addInputKnobInt('Bars', 4, 1, 16)
+    form.addInputCombo('Division', DIVISIONS, 1)
+    form.addInputKnobInt('Root MIDI note', 36, 24, 84)
+    form.addInputCombo('Scale', SCALES, 0)
+    form.addInputCombo('Bass style', STYLES, 0)
+    form.addInputKnob('Density', 0.75, 0.0, 1.0)
+    form.addInputKnob('Swing', 0.12, 0.0, 0.49)
+    form.addInputKnob('Humanize', 0.08, 0.0, 0.30)
+    form.addInputKnobInt('Seed', 71, 0, 999999)
+    form.addInputCheckbox('Replace existing notes', True)
+    return form
+
+def _add(pitch, start, duration, velocity, color=0):
+    n=flp.Note()
+    n.number=max(0,min(127,int(pitch)))
+    n.time=max(0,int(round(start)))
+    n.length=max(1,int(round(duration)))
+    n.velocity=max(0.01,min(1.0,velocity))
+    n.color=int(color)%16
+    flp.score.addNote(n)
+
+def _pitch(root, degree, scale):
+    tones=SCALE_MAP[scale]
+    return max(0,min(127,root+12*(degree//len(tones))+tones[degree%len(tones)]))
+
+def _event_time(idx, unit, swing, human, rng):
+    return max(0,idx*unit+(unit*swing if idx%2 else 0)+rng.uniform(-unit*human,unit*human))
+
+def apply(form):
+    mode=form.getInputValue('Mode')
+    bars=form.getInputValue('Bars')
+    ppq=flp.score.PPQ
+    division=form.getInputValue('Division')
+    tick=[ppq/2.0,ppq/4.0,ppq/6.0,ppq/8.0][division]
+    ticks_per_bar=4*ppq
+    length=bars*ticks_per_bar
+    root=form.getInputValue('Root MIDI note')
+    scale=form.getInputValue('Scale')
+    style=form.getInputValue('Bass style')
+    density=form.getInputValue('Density')
+    swing=form.getInputValue('Swing')
+    human=form.getInputValue('Humanize')
+    rng=random.Random(form.getInputValue('Seed'))
+    if form.getInputValue('Replace existing notes'):
+        flp.score.clearNotes(True)
+    count=int(length/tick)
+    # One instrument at a time: an individual FL Piano Roll cannot target multiple channels.
+    if mode==0:
+        drums=[(36,0),(37,1),(39,2),(43,3)]
+        for idx in range(count):
+            s=idx%16
+            for pitch,voice in drums:
+                hit= (s in (0,8,10)) if voice==0 else ((s in (4,12)) if voice==1 else ((s%2==0) if voice==2 else (s in (7,15))))
+                if not hit:continue
+                if voice>=2 and rng.random()>density:continue
+                t=_event_time(idx,tick,swing if voice>=2 else swing*0.25,human,rng)
+                v=(0.94 if s%4==0 else 0.67)+rng.uniform(-human*0.4,human*0.4)
+                _add(pitch,t,tick*0.48,v,voice)
+    elif mode==1:
+        pattern=BASS_STYLES[style]
+        for idx in range(count):
+            s=idx%16
+            if s!=0 and rng.random()>density*(1.0 if s%4==0 else 0.7):continue
+            degree=pattern[s]
+            t=_event_time(idx,tick,swing,human,rng)
+            _add(_pitch(root,degree,scale),t,tick*(0.8 if style==1 else 0.67),0.91 if s%4==0 else 0.75)
+    elif mode==2:
+        for bar in range(bars):
+            start=bar*ticks_per_bar
+            for degree in (0,2,4,6):
+                _add(_pitch(root,degree,scale),start,ticks_per_bar*0.85,0.65,1)
+    elif mode==3:
+        triad=[_pitch(root,i,scale) for i in (0,2,4)]
+        for idx in range(count):
+            t=_event_time(idx,tick,swing,human,rng)
+            _add(triad[idx%3]+12*(idx//3%2),t,tick*0.74,0.88 if idx%4==0 else 0.7,2)
+    elif mode==4:
+        last=0
+        for idx in range(count):
+            if rng.random()>density:continue
+            direction=rng.choice([-2,-1,0,0,1,2])
+            last=max(0,min(12,last+direction))
+            t=_event_time(idx,tick,swing,human,rng)
+            _add(_pitch(root,last,scale),t,tick*(0.8 if rng.random()<0.7 else 1.4),
+                 0.72+rng.uniform(-0.15,0.15),3)
