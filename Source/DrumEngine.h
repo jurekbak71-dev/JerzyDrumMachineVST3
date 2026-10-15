@@ -416,6 +416,9 @@ public:
  void fill(){auto&p=pattern(current);for(int s=juce::jmax(0,p.length-4);s<p.length;s++){p.step[3][s].on=true;p.step[3][s].velocity=.65f+.1f*(s&1);p.step[4][s].on=(s&1)!=0;}}
  void process(juce::AudioBuffer<float>&out,std::array<juce::AudioBuffer<float>*,voices>* stems=nullptr){
   out.clear(); if(stems)for(auto*sb:*stems)if(sb)sb->clear(); drainSynthCommands(); const int n=out.getNumSamples(); const double base=sr*60.0/bpm/(tripletSubdivision?6.0:4.0);
+  if(tapeEnabled && tapeMix>.001f)extendedFx.configureTape(tapeAge,tapeFilter);
+  const double blockDelaySamples=juce::jlimit(1.0,sr*1.9,sr*60.0/juce::jmax(20.0,bpm)*delayBeats);
+  const int blockHoldSamples=juce::jmax(1,(int)(sr*60.0/juce::jmax(20.0,bpm)/4.0));
   bool anySolo=false;std::array<float,voices> panL{},panR{},driveGain{},driveNorm{},filterAlpha{},blockPeak{},trackStepBase{};
   const float filterPosition=juce::jlimit(0.0f,1.0f,masterFilter);const bool filterActive=std::abs(filterPosition-.5f)>.005f;const bool filterLowPass=filterPosition<.5f;const float filterFraction=filterLowPass?filterPosition*2.0f:(filterPosition-.5f)*2.0f;const float masterCutoff=filterLowPass?80.0f*std::pow(20000.0f/80.0f,filterFraction):20.0f*std::pow(12000.0f/20.0f,filterFraction);const float masterFilterAlpha=1.0f-std::exp(-juce::MathConstants<float>::twoPi*masterCutoff/(float)sr);masterDJLeft.coefficient=masterFilterAlpha;masterDJRight.coefficient=masterFilterAlpha;
   for(int v=0;v<voices;v++){anySolo|=solo[(size_t)v];const float pan=juce::jlimit(-1.0f,1.0f,panorama[(size_t)v]);panL[(size_t)v]=std::sqrt(.5f*(1.0f-pan));panR[(size_t)v]=std::sqrt(.5f*(1.0f+pan));const float amount=1.0f+juce::jlimit(0.0f,1.0f,channelDrive[(size_t)v])*5.0f;driveGain[(size_t)v]=amount;driveNorm[(size_t)v]=juce::jmax(1.0e-5f,std::tanh(amount));const float amountFilter=juce::jlimit(0.0f,1.0f,channelFilter[(size_t)v]);const float cutoff=20000.0f*std::pow(100.0f/20000.0f,amountFilter);filterAlpha[(size_t)v]=1.0f-std::exp(-juce::MathConstants<float>::twoPi*cutoff/(float)sr);trackStepBase[(size_t)v]=(float)(sr*60.0/bpm/(pattern(current).trackTriplet[(size_t)v]?6.0:4.0));}
@@ -432,12 +435,11 @@ chorusSendL+=vl*chorusSend[v];chorusSendR+=vr*chorusSend[v];tapeSendL+=vl*tapeSe
    float wetL=revSendL,wetR=revSendR;reverb.processStereo(&wetL,&wetR,1);
    if(!delayL.empty()){
     // Smooth delay time after FL Studio tempo automation, avoiding hard read jumps.
-    const double target=juce::jlimit(1.0,sr*1.9,sr*60.0/juce::jmax(20.0,bpm)*delayBeats);
-    if(delayReadSamples<1.0)delayReadSamples=target;
-    else delayReadSamples+=(target-delayReadSamples)*delayTimeSlew;
-    const double sourceRead=(double)delayPos+(double)delayL.size()-delayReadSamples;
-    double wrapped=std::fmod(sourceRead,(double)delayL.size());
-    if(wrapped<0)wrapped+=(double)delayL.size();
+    if(delayReadSamples<1.0)delayReadSamples=blockDelaySamples;
+    else delayReadSamples+=(blockDelaySamples-delayReadSamples)*delayTimeSlew;
+    // Source read stays in [0,2*ringCapacity); avoid per-sample fmod().
+    double wrapped=(double)delayPos+(double)delayL.size()-delayReadSamples;
+    if(wrapped>=(double)delayL.size())wrapped-=(double)delayL.size();
     const size_t index=(size_t)wrapped,next=(index+1)%delayL.size();
     const float fraction=(float)(wrapped-index);
     float dl=delayL[index]*(1.f-fraction)+delayL[next]*fraction;
@@ -461,7 +463,7 @@ chorusSendL+=vl*chorusSend[v];chorusSendR+=vr*chorusSend[v];tapeSendL+=vl*tapeSe
         if(delayMode==3){
             if(delayHoldCountdown--<=0){
                 delayHoldL=dl;delayHoldR=dr;
-                delayHoldCountdown=juce::jmax(1,(int)(sr*60.0/juce::jmax(20.0,bpm)/4.0));
+                delayHoldCountdown=blockHoldSamples;
             }
             // Short interpolation prevents clicks while preserving stepped character.
             delayHoldSmoothL+=delayHoldSlew*(delayHoldL-delayHoldSmoothL);
