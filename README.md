@@ -30,3 +30,45 @@ Use this branch as the only forward base. Do not overwrite it with the older mai
 JerzyDrumMachine-VST3 ZIP.
 The plug-in identity remains `com.jerzyaudio.drummachine` / `JDrm`.
 Windows CI + physical FL Studio acceptance remain mandatory before replacing a stable version.
+
+## Jerzy Drum Machine v0.3.0 (development): Bank editing + extended FX
+
+**SEQUENCER**
+- Select instrument and bank **1–16**, press **COPY 16**.
+- Select **17–32** (or 33–48 / 49–64), press **PASTE 16**.
+- Only the destination 16-step segment changes; unrelated banks and tracks are retained.
+  Copy keeps per-step velocity, note, probability, ratchet, microtiming, accent,
+  flam and all step-sound automation.
+- **CLEAR: TRACK** (default) + **CLEAR SEQ** clears all 64 steps of just the
+  visible instrument. Toggle to **CLEAR: ALL** to clear the whole pattern.
+- **DUPLICATE** is unchanged and remains a separate action.
+- For precise MIDI transfer retain the `.jdmkit` kit file: MIDI alone cannot
+  encode per-step sound-automation, effect sends or complete song arrangement.
+
+**MIXER**
+- 12 channel strips each with additional **CHORUS** and **TAPE** send knobs.
+- The FX are master stereo send/return processors. Existing clean stem outputs
+  remain unchanged; the summed master receives the FX returns.
+- Sends default to 0 and both effects default OFF, so an existing FL Studio
+  project retains its original sound until explicitly enabled.
+
+**FX**
+- Chorus / Widener: ON, return, modulation depth, stereo width.
+- Tape Drive: ON, return, magnetic saturation/age, mechanical wear (wow,
+  flutter, dropouts, occasional surface crackles, hiss), tone LPF.
+- Delay mode: Classic/Pingpong, Stereo, Tape Echo, tempo-aligned Sample & Hold
+  (stepped output at 1/16), Diffuse Dub. Original Ping-Pong button remains for
+  the Classic mode. Delay length/feedback/mix remain host-automatable.
+- Tempo automation is smoothed at the read head to avoid abrupt sample jumps;
+  very rapid tempo changes may still create a deliberate pitch glide.
+
+**Build / compatibility**
+- All NEW APVTS IDs are appended; original parameters, original VST3 identity
+  `com.jerzyaudio.drummachine` / `JDrm` and .jdmkit format are preserved.
+- CPU: tape filter/normalization, delay clock divisions precomputed per block,
+  buffers allocated only on prepareToPlay.
+- Windows CI must pass both `JerzyDrumMachine_VST3` and `JerzyDrumMachineTests`
+  before it is appropriate to install this development binary in FL Studio.
+- Tests cover GUI bank copy/paste, CLEAR scope, stereo chorus, tape, and
+  finite output for 5 delay modes. A real FL Studio GUI/audio session remains
+  mandatory before production release.
