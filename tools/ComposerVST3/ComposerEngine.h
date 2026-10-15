@@ -126,162 +126,6 @@ inline int chordNotes(const Settings& s, int bar, std::array<int,5>& notes) noex
     return count;
 }
 struct BassHit {int sixteenth; int chordOffset;};
-inline void generateDrums(const Settings& s, int bar, Bar& result) noexcept {
-    static constexpr int kicks[8][5] = {
-        {0,8,10,-1,-1}, {0,10,-1,-1,-1}, {0,4,8,12,-1},
-        {0,6,10,-1,-1}, {0,8,-1,-1,-1}, {0,4,8,12,-1},
-        {0,7,10,-1,-1}, {0,8,11,-1,-1}
-    };
-    static constexpr int snare[8][4] = {
-        {4,12,-1,-1}, {4,12,-1,-1}, {4,12,-1,-1},
-        {4,12,-1,-1}, {12,-1,-1,-1}, {4,12,-1,-1},
-        {4,12,-1,-1}, {4,12,-1,-1}
-    };
-    const int st = std::clamp(s.style,0,7);
-    const double unit = s.barLength/16.;
-    for (int kind=0;kind<2;++kind) {
-        const int n = kind==0?5:4;
-        for (int j=0;j<n;++j) {
-            const int pos = kind==0?kicks[st][j]:snare[st][j];
-            if(pos<0)continue;
-            if(pos==0 || chance(s,bar,100+kind*16+pos,.75f+.25f*s.density)) {
-                const double at=humanTime(s,bar,300+kind*17+pos,pos*unit,unit);
-                result.add(kind==0?36:37,at,unit*.55,
-                           velocity(s,bar,kind*17+pos,kind==0?117:109));
-            }
-        }
-    }
-    const double step = stepLength(s.division);
-    const int hats = std::clamp(static_cast<int>(std::round(s.barLength/step)),1,96);
-    for (int i=0;i<hats;++i) {
-        if (!chance(s,bar,400+i,.22f+.78f*s.density))continue;
-        const double at = humanTime(s,bar,600+i,i*s.barLength/hats,step);
-        result.add(39,at,step*.42,velocity(s,bar,800+i,i%2==0?88:63));
-    }
-    if (st!=4 && chance(s,bar,990,s.density*.7f))
-        result.add(43,humanTime(s,bar,991,s.barLength*.875,unit),unit*1.6,75);
-    if (bar%4==3 && chance(s,bar,992,s.variation*.7f))
-        for (int i=13;i<16;++i)
-            if (chance(s,bar,995+i,s.variation*.7f))
-                result.add(37,i*unit,unit*.4,48+i%3*8);
-}
-inline void generateBass(const Settings& s, int bar, Bar& result) noexcept {
-    static const BassHit groove[8][7] = {
-        {{0,0},{4,0},{8,4},{12,0},{-1,0},{-1,0},{-1,0}},
-        {{0,0},{6,4},{12,0},{-1,0},{-1,0},{-1,0},{-1,0}},
-        {{0,0},{2,7},{4,4},{6,0},{10,7},{12,4},{-1,0}},
-        {{0,0},{3,4},{6,7},{8,0},{11,2},{14,4},{-1,0}},
-        {{0,0},{8,4},{-1,0},{-1,0},{-1,0},{-1,0},{-1,0}},
-        {{0,0},{4,0},{8,4},{12,0},{-1,0},{-1,0},{-1,0}},
-        {{0,0},{3,0},{8,4},{11,2},{14,0},{-1,0},{-1,0}},
-        {{0,0},{6,4},{12,0},{-1,0},{-1,0},{-1,0},{-1,0}}
-    };
-    const int st=std::clamp(s.style,0,7);
-    const int degree=chordDegree(s.progression,bar);
-    const double unit=s.barLength/16.;
-    for(int j=0;j<7;++j) {
-        const auto hit=groove[st][j];
-        if(hit.sixteenth<0)break;
-        if(j>0 && !chance(s,bar,1100+j,.2f+.8f*s.density))continue;
-        int noteDegree=degree+hit.chordOffset;
-        if(bar%2==1 && j>0 && chance(s,bar,1120+j,s.variation*.30f))
-            noteDegree+=(chance(s,bar,1150+j,.5f)?1:-1);
-        const int pitch=degreePitch(midiRoot(s),noteDegree,s.scale);
-        const double at=humanTime(s,bar,1200+j,hit.sixteenth*unit,unit);
-        double length = s.style==4 ? s.barLength*.48 : unit*3.0;
-        // Gate applied exactly once in finishBar, independent of note value.
-        result.add(pitch,at,length,velocity(s,bar,1300+j,j==0?117:96));
-    }
-    if (bar%4!=3 && chance(s,bar,1350,s.variation*.48f)) {
-        const int next=chordDegree(s.progression,bar+1);
-        const int approach=next>degree?next-1:next+1;
-        result.add(degreePitch(midiRoot(s),approach,s.scale),
-                   humanTime(s,bar,1370,15*unit,unit),unit*.50,72);
-    }
-}
-inline void generateChords(const Settings& s, int bar, Bar& result) noexcept {
-    std::array<int,5> pitches{};
-    const int count=chordNotes(s,bar,pitches);
-    std::array<double,4> positions{{0,.5,-1,-1}};
-    double duration = s.barLength*.43;
-    if(s.style==4){ positions={{0,-1,-1,-1}};duration=s.barLength*.99; }
-    else if(s.style==1||s.style==5){positions={{.125,.375,.625,.875}};duration=s.barLength*.23;}
-    else if(s.style==3||s.style==6){positions={{0,.375,.625,.875}};duration=s.barLength*.19;}
-    else if(s.style==7){positions={{0,.625,-1,-1}};duration=s.barLength*.32;}
-    for(int i=0;i<4;++i) {
-        if(positions[static_cast<std::size_t>(i)]<0)continue;
-        if(i>0 && !chance(s,bar,1400+i,.25f+.75f*s.density))continue;
-        const double at=humanTime(s,bar,1450+i,positions[static_cast<std::size_t>(i)]*s.barLength,
-                                  s.barLength/16.);
-        for(int v=0;v<count;++v)
-            result.add(pitches[static_cast<std::size_t>(v)],at,
-                       duration,
-                       velocity(s,bar,1500+i*5+v,i==0?99:82));
-    }
-}
-inline void generateArp(const Settings& s, int bar, Bar& result,
-                        const std::array<int,16>& held, int heldCount) noexcept {
-    std::array<int,48> notes{};
-    int size=0;
-    if(heldCount>0){
-        for(int oct=0;oct<std::clamp(s.arpOctaves,1,3);++oct)
-            for(int i=0;i<heldCount && size<48;++i) {
-                const int p=held[static_cast<std::size_t>(i)]+oct*12;
-                if(p>=0 && p<=127)notes[static_cast<std::size_t>(size++)]=p;
-            }
-    }else{
-        std::array<int,5> chord{};
-        const int count=chordNotes(s,bar,chord);
-        for(int oct=0;oct<std::clamp(s.arpOctaves,1,3);++oct)
-            for(int i=0;i<count && size<48;++i){
-                const int p=chord[static_cast<std::size_t>(i)]+oct*12;
-                if(p>=0 && p<=127)notes[static_cast<std::size_t>(size++)]=p;
-            }
-    }
-    if(size<1)return;
-    const double unit=stepLength(s.division);
-    const int steps=std::clamp(static_cast<int>(std::ceil(s.barLength/unit)),1,128);
-    for(int i=0;i<steps;++i) {
-        if(i && !chance(s,bar,1600+i,.18f+.82f*s.density))continue;
-        int index=i;
-        if(s.direction==1)index=size-1-i%size;
-        else if(s.direction==2 && size>1){
-            const int period=size*2-2;
-            const int k=i%period;
-            index=k<size?k:period-k;
-        }else index=i%size;
-        const double pos=i*unit;
-        if(pos>=s.barLength)break;
-        result.add(notes[static_cast<std::size_t>(index)],
-                   humanTime(s,bar,1700+i,pos,unit),
-                   unit,
-                   velocity(s,bar,1800+i,i%4==0?112:88));
-    }
-}
-inline void generateMelody(const Settings& s, int bar, Bar& result) noexcept {
-    static constexpr int contour[16]={0,2,4,2,1,3,4,2,0,-1,0,1,2,1,0,-1};
-    const double unit=stepLength(s.division);
-    const int steps=std::clamp(static_cast<int>(std::ceil(s.barLength/unit)),1,128);
-    const int degree=chordDegree(s.progression,bar);
-    for(int i=0;i<steps;++i) {
-        if(bar%4==3 && i>steps*3/4)continue; // musical ending with a breath
-        const int motifIndex=(i*16)/steps;
-        const bool strong=i==0 || i==steps/2;
-        const float probability=strong?1.f:.16f+s.density*.62f;
-        // Same motif decisions for consecutive bars; variation alters notes, not all rhythms.
-        if(!chance(s,0,1900+i,probability))continue;
-        int contourDegree=contour[std::clamp(motifIndex,0,15)];
-        if(bar%2 && (s.style==4||s.style==7))contourDegree=-contourDegree;
-        if(bar>=2 && !strong && chance(s,bar,2000+i,s.variation*.32f))
-            contourDegree+=chance(s,bar,2100+i,.5f)?1:-1;
-        if(i==0 || (bar%4==3 && i>=steps/2))contourDegree=0;
-        const int pitch=degreePitch(midiRoot(s)+12,degree+contourDegree,s.scale);
-        const double at=humanTime(s,bar,2200+i,i*unit,unit);
-        result.add(pitch,at,unit*std::clamp(double(s.gate),.25,1.15),
-                   velocity(s,bar,2300+i,strong?110:86));
-    }
-}
-
 // Musician-readable duration selections in quarter-note units.
 // Auto uses each instrument's designed rhythmic note lengths.
 inline double selectedNoteLength(int index, double barLength) noexcept {
@@ -368,6 +212,186 @@ inline double syncopatedPosition(const Settings& s,int bar,int key,double pos,do
     if(!move)return pos;
     // Pull a weak event half a rhythmic step early, without crossing the bar.
     return std::clamp(pos - unit*.5,0.0,std::max(0.,s.barLength-.001));
+}
+
+inline void generateDrums(const Settings& s, int bar, Bar& result) noexcept {
+    static constexpr int kicks[8][5] = {
+        {0,8,10,-1,-1}, {0,10,-1,-1,-1}, {0,4,8,12,-1},
+        {0,6,10,-1,-1}, {0,8,-1,-1,-1}, {0,4,8,12,-1},
+        {0,7,10,-1,-1}, {0,8,11,-1,-1}
+    };
+    static constexpr int snare[8][4] = {
+        {4,12,-1,-1}, {4,12,-1,-1}, {4,12,-1,-1},
+        {4,12,-1,-1}, {12,-1,-1,-1}, {4,12,-1,-1},
+        {4,12,-1,-1}, {4,12,-1,-1}
+    };
+    const int st = std::clamp(s.style,0,7);
+    const double unit = s.barLength/16.;
+    for (int kind=0;kind<2;++kind) {
+        const int n = kind==0?5:4;
+        for (int j=0;j<n;++j) {
+            const int pos = kind==0?kicks[st][j]:snare[st][j];
+            if(pos<0)continue;
+            if(pos==0 || chance(s,bar,100+kind*16+pos,.75f+.25f*s.density)) {
+                const double at=humanTime(s,bar,300+kind*17+pos,
+                    syncopatedPosition(s,bar,300+kind*17+pos,pos*unit,unit),unit);
+                result.add(kind==0?36:37,at,unit*.55,
+                           velocity(s,bar,kind*17+pos,kind==0?117:109));
+            }
+        }
+    }
+    const double step = stepLength(s.division);
+    const int hats = std::clamp(static_cast<int>(std::round(s.barLength/step)),1,96);
+    for (int i=0;i<hats;++i) {
+        if (!chance(s,bar,400+i,.22f+.78f*s.density))continue;
+        const double at = humanTime(s,bar,600+i,i*s.barLength/hats,step);
+        result.add(39,at,step*.42,velocity(s,bar,800+i,i%2==0?88:63));
+    }
+    if (st!=4 && chance(s,bar,990,s.density*.7f))
+        result.add(43,humanTime(s,bar,991,s.barLength*.875,unit),unit*1.6,75);
+    if (bar%4==3 && chance(s,bar,992,s.variation*.7f))
+        for (int i=13;i<16;++i)
+            if (chance(s,bar,995+i,s.variation*.7f))
+                result.add(37,i*unit,unit*.4,48+i%3*8);
+    for (int pos : {3,11}) { // quiet ghost snares before backbeats
+        if(chance(s,bar,1012+pos,s.ghosts*.9f))
+            result.add(37,humanTime(s,bar,1020+pos,pos*unit,unit),
+                       unit*.35,37 + (pos==11?8:0));
+    }
+}
+inline void generateBass(const Settings& s, int bar, Bar& result) noexcept {
+    static const BassHit groove[8][7] = {
+        {{0,0},{4,0},{8,4},{12,0},{-1,0},{-1,0},{-1,0}},
+        {{0,0},{6,4},{12,0},{-1,0},{-1,0},{-1,0},{-1,0}},
+        {{0,0},{2,7},{4,4},{6,0},{10,7},{12,4},{-1,0}},
+        {{0,0},{3,4},{6,7},{8,0},{11,2},{14,4},{-1,0}},
+        {{0,0},{8,4},{-1,0},{-1,0},{-1,0},{-1,0},{-1,0}},
+        {{0,0},{4,0},{8,4},{12,0},{-1,0},{-1,0},{-1,0}},
+        {{0,0},{3,0},{8,4},{11,2},{14,0},{-1,0},{-1,0}},
+        {{0,0},{6,4},{12,0},{-1,0},{-1,0},{-1,0},{-1,0}}
+    };
+    const int st=std::clamp(s.style,0,7);
+    const int degree=chordDegree(s.progression,bar);
+    const double unit=s.barLength/16.;
+    for(int j=0;j<7;++j) {
+        const auto hit=groove[st][j];
+        if(hit.sixteenth<0)break;
+        if(j>0 && !(s.rhythm==0
+            ? chance(s,bar,1100+j,.2f+.8f*s.density)
+            : rhythmHit(s,bar,hit.sixteenth,16,false)))continue;
+        int noteDegree=degree+hit.chordOffset;
+        if(bar%2==1 && j>0 && chance(s,bar,1120+j,s.variation*.30f))
+            noteDegree+=(chance(s,bar,1150+j,.5f)?1:-1);
+        const int pitch=degreePitch(midiRoot(s),noteDegree,s.scale);
+        const double at=humanTime(s,bar,1200+j,
+            syncopatedPosition(s,bar,1200+j,hit.sixteenth*unit,unit),unit);
+        double length = s.style==4 ? s.barLength*.48 : unit*3.0;
+        // Gate applied exactly once in finishBar, independent of note value.
+        result.add(pitch,at,length,velocity(s,bar,1300+j,j==0?117:96));
+    }
+    if(s.ghosts>0.01f && chance(s,bar,1341,s.ghosts*.75f)) {
+        result.add(degreePitch(midiRoot(s),degree+4,s.scale),
+                   humanTime(s,bar,1342,s.barLength*11./16.,unit),unit*.32,43);
+    }
+    if (bar%4!=3 && chance(s,bar,1350,s.variation*.48f)) {
+        const int next=chordDegree(s.progression,bar+1);
+        const int approach=next>degree?next-1:next+1;
+        result.add(degreePitch(midiRoot(s),approach,s.scale),
+                   humanTime(s,bar,1370,15*unit,unit),unit*.50,72);
+    }
+}
+inline void generateChords(const Settings& s, int bar, Bar& result) noexcept {
+    std::array<int,5> pitches{};
+    const int count=chordNotes(s,bar,pitches);
+    std::array<double,4> positions{{0,.5,-1,-1}};
+    double duration = s.barLength*.43;
+    if(s.style==4){ positions={{0,-1,-1,-1}};duration=s.barLength*.99; }
+    else if(s.style==1||s.style==5){positions={{.125,.375,.625,.875}};duration=s.barLength*.23;}
+    else if(s.style==3||s.style==6){positions={{0,.375,.625,.875}};duration=s.barLength*.19;}
+    else if(s.style==7){positions={{0,.625,-1,-1}};duration=s.barLength*.32;}
+    for(int i=0;i<4;++i) {
+        if(positions[static_cast<std::size_t>(i)]<0)continue;
+        if(i>0 && !chance(s,bar,1400+i,.25f+.75f*s.density))continue;
+        const double at=humanTime(s,bar,1450+i,positions[static_cast<std::size_t>(i)]*s.barLength,
+                                  s.barLength/16.);
+        for(int v=0;v<count;++v)
+            result.add(pitches[static_cast<std::size_t>(v)],at,
+                       duration,
+                       velocity(s,bar,1500+i*5+v,i==0?99:82));
+    }
+}
+inline void generateArp(const Settings& s, int bar, Bar& result,
+                        const std::array<int,16>& held, int heldCount) noexcept {
+    std::array<int,48> notes{};
+    int size=0;
+    if(heldCount>0){
+        for(int oct=0;oct<std::clamp(s.arpOctaves,1,3);++oct)
+            for(int i=0;i<heldCount && size<48;++i) {
+                const int p=held[static_cast<std::size_t>(i)]+oct*12;
+                if(p>=0 && p<=127)notes[static_cast<std::size_t>(size++)]=p;
+            }
+    }else{
+        std::array<int,5> chord{};
+        const int count=chordNotes(s,bar,chord);
+        for(int oct=0;oct<std::clamp(s.arpOctaves,1,3);++oct)
+            for(int i=0;i<count && size<48;++i){
+                const int p=chord[static_cast<std::size_t>(i)]+oct*12;
+                if(p>=0 && p<=127)notes[static_cast<std::size_t>(size++)]=p;
+            }
+    }
+    if(size<1)return;
+    const double unit=stepLength(s.division);
+    const int steps=std::clamp(static_cast<int>(std::ceil(s.barLength/unit)),1,128);
+    for(int i=0;i<steps;++i) {
+        if(i && !(s.rhythm==0
+            ? chance(s,bar,1600+i,.18f+.82f*s.density)
+            : rhythmHit(s,bar,i,steps,false)))continue;
+        int index=i;
+        if(s.direction==1)index=size-1-i%size;
+        else if(s.direction==2 && size>1){
+            const int period=size*2-2;
+            const int k=i%period;
+            index=k<size?k:period-k;
+        }else index=i%size;
+        const double pos=i*unit;
+        if(pos>=s.barLength)break;
+        result.add(notes[static_cast<std::size_t>(index)],
+                   humanTime(s,bar,1700+i,
+                       syncopatedPosition(s,bar,1700+i,pos,unit),unit),
+                   unit,
+                   velocity(s,bar,1800+i,i%4==0?112:88));
+    }
+}
+inline void generateMelody(const Settings& s, int bar, Bar& result) noexcept {
+    static constexpr int contour[16]={0,2,4,2,1,3,4,2,0,-1,0,1,2,1,0,-1};
+    const double unit=stepLength(s.division);
+    const int steps=std::clamp(static_cast<int>(std::ceil(s.barLength/unit)),1,128);
+    const int degree=chordDegree(s.progression,bar);
+    for(int i=0;i<steps;++i) {
+        if(bar%4==3 && i>steps*3/4)continue; // musical ending with a breath
+        const int motifIndex=(i*16)/steps;
+        const bool strong=i==0 || i==steps/2;
+        const float probability=strong?1.f:.16f+s.density*.62f;
+        // Same motif decisions for consecutive bars; variation alters notes, not all rhythms.
+        if(!chance(s,0,1900+i,probability))continue;
+        if(s.rhythm!=0 && !rhythmHit(s,bar,i,steps,strong))continue;
+        int contourDegree=contour[std::clamp(motifIndex,0,15)];
+        if(bar%2 && (s.style==4||s.style==7))contourDegree=-contourDegree;
+        if(bar>=2 && !strong && chance(s,bar,2000+i,s.variation*.32f))
+            contourDegree+=chance(s,bar,2100+i,.5f)?1:-1;
+        if(i==0 || (bar%4==3 && i>=steps/2))contourDegree=0;
+        const int pitch=degreePitch(midiRoot(s)+12,degree+contourDegree,s.scale);
+        const double at=humanTime(s,bar,2200+i,
+            syncopatedPosition(s,bar,2200+i,i*unit,unit),unit);
+        result.add(pitch,at,unit*std::clamp(double(s.gate),.25,1.15),
+                   velocity(s,bar,2300+i,strong?110:86));
+    }
+    if(s.ghosts>0.01f && bar%2==1 && chance(s,bar,2401,s.ghosts*.6f)) {
+        const int next=chordDegree(s.progression,bar+1);
+        const double at=std::max(0.,s.barLength-stepLength(s.division)*.5);
+        result.add(degreePitch(midiRoot(s)+12,next-1,s.scale),
+                   at,stepLength(s.division)*.4,46);
+    }
 }
 
 inline Bar generateBar(const Settings& s, int bar, const std::array<int,16>& held={},
