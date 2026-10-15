@@ -196,7 +196,7 @@ public:
  enum class ChangeMode{Immediate=0,NextBeat,NextBar,EndPattern};
  static constexpr int voices=12,patterns=32;
  DrumEngine(){trackStep.fill(-1);dsp[5].extra1=0.0f;dsp[5].extra2=.35f;dsp[6].extra1=.4f;dsp[6].extra2=.25f;artifactRandom.setSeed((int64_t)artifactSeed);for(auto&patternIndex:audioSongPattern)patternIndex.store(0,std::memory_order_relaxed);for(auto&bars:audioSongBars)bars.store(4,std::memory_order_relaxed);}
- void prepare(double s){sr=s;trackSamplesToStep.fill(0.0);for(auto&v:dsp)v.prepare(s);rebuildCompressorCoefficients();reverb.setSampleRate(s);juce::Reverb::Parameters rp;rp.roomSize=reverbSize;rp.damping=reverbDamping;rp.wetLevel=reverbEnabled?reverbMix:0.0f;rp.dryLevel=0.0f;rp.width=1.0f;reverb.setParameters(rp);delayL.assign((size_t)(s*2.0),0.f);delayR.assign((size_t)(s*2.0),0.f);extendedFx.prepare(s);delayReadSamples=0.0;delayHoldCountdown=0;initialiseFactoryPatterns();}
+ void prepare(double s){sr=s;trackSamplesToStep.fill(0.0);for(auto&v:dsp)v.prepare(s);rebuildCompressorCoefficients();reverb.setSampleRate(s);juce::Reverb::Parameters rp;rp.roomSize=reverbSize;rp.damping=reverbDamping;rp.wetLevel=reverbEnabled?reverbMix:0.0f;rp.dryLevel=0.0f;rp.width=1.0f;reverb.setParameters(rp);delayL.assign((size_t)(s*2.0),0.f);delayR.assign((size_t)(s*2.0),0.f);extendedFx.prepare(s);delayReadSamples=0.0;delayHoldCountdown=0;delayTimeSlew=1.0-std::exp(-1.0/(s*.075));delayHoldSlew=(float)(1.0-std::exp(-1.0/(s*.003)));initialiseFactoryPatterns();}
  void triggerStep(int i,float v,int stepIndex){if(i<0||i>=voices)return;const auto& st=pattern(current).step[(size_t)i][(size_t)juce::jlimit(0,63,stepIndex)];accentGain[(size_t)i]=st.accent?1.65f:1.0f;if(i<8){dsp[(size_t)i].trigger(v,i,&st);return;}if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){const size_t slot=(size_t)(i-8);sampleVelocity[slot]=v;const auto& sample=samples[slot];const float pitch=(st.soundMask&1)?juce::jmap(st.sound[0],0.0f,1.0f,.5f,2.0f):sample.pitch;const int reverse=(st.soundMask&8)?(st.sound[3]>.75f?1:0):-1;const float decay=(st.soundMask&2)?st.sound[1]:-1.0f;const float tone=(st.soundMask&4)?st.sound[2]:-1.0f;samples[slot].trigger(pitch,reverse,decay,tone);return;}if(i==11){const int note=juce::jlimit(0,127,st.note+12*synthTranspose);dsp[11].synthNoteOn(note,v,&st);return;}trigger(i,v);}
  void trigger(int i,float v){if(i>=0&&i<voices){accentGain[(size_t)i]=1.0f;if(i==11){dsp[11].synthNoteOn(dsp[11].midiNote,v);synthGateSamples=(int)(sr*60.0/bpm*.205);return;}if(i>=8&&i<=10&&samples[(size_t)(i-8)].loaded){sampleVelocity[(size_t)(i-8)]=v;samples[(size_t)(i-8)].trigger();}else dsp[(size_t)i].trigger(v,i);}}
  void triggerSynthNote(int note,float velocity){const int pitched=juce::jlimit(0,127,note+12*synthTranspose);dsp[11].synthNoteOn(pitched,velocity);synthGateSamples=-1;synthPendingReleaseSamples=0;}
@@ -431,12 +431,45 @@ revSendL+=vl*reverbSend[v];revSendR+=vr*reverbSend[v];delSendL+=vl*delaySend[v];
 chorusSendL+=vl*chorusSend[v];chorusSendR+=vr*chorusSend[v];tapeSendL+=vl*tapeSend[v];tapeSendR+=vr*tapeSend[v];}
    float wetL=revSendL,wetR=revSendR;reverb.processStereo(&wetL,&wetR,1);
    if(!delayL.empty()){
-    const size_t read=(delayPos+delayL.size()-(size_t)juce::jlimit(1.0,sr*1.9,sr*60.0/bpm*delayBeats))%delayL.size();
-    const float dl=delayL[read],dr=delayR[read];
-    delayL[delayPos]=delSendL+(delayPingPong?dr:dl)*delayFeedback;
-    delayR[delayPos]=delSendR+(delayPingPong?dl:dr)*delayFeedback;
+    // Smooth delay time after FL Studio tempo automation, avoiding hard read jumps.
+    const double target=juce::jlimit(1.0,sr*1.9,sr*60.0/juce::jmax(20.0,bpm)*delayBeats);
+    if(delayReadSamples<1.0)delayReadSamples=target;
+    else delayReadSamples+=(target-delayReadSamples)*delayTimeSlew;
+    const double sourceRead=(double)delayPos+(double)delayL.size()-delayReadSamples;
+    double wrapped=std::fmod(sourceRead,(double)delayL.size());
+    if(wrapped<0)wrapped+=(double)delayL.size();
+    const size_t index=(size_t)wrapped,next=(index+1)%delayL.size();
+    const float fraction=(float)(wrapped-index);
+    float dl=delayL[index]*(1.f-fraction)+delayL[next]*fraction;
+    float dr=delayR[index]*(1.f-fraction)+delayR[next]*fraction;
+    // Modes: 0 legacy (existing PING-PONG toggle), 1 stereo, 2 dub tape,
+    // 3 tempo-synced sample & hold, 4 diffuse cross-feedback.
+    const bool ping=(delayMode==0?delayPingPong:delayMode==2||delayMode==4);
+    float fbL=ping?dr:dl,fbR=ping?dl:dr;
+    if(delayMode==2){
+        delayToneL+=.11f*(fbL-delayToneL);delayToneR+=.11f*(fbR-delayToneR);
+        fbL=std::tanh(delayToneL*1.9f)*.78f;
+        fbR=std::tanh(delayToneR*1.9f)*.78f;
+    }else if(delayMode==4){
+        fbL=std::tanh((.8f*dl+.2f*dr)*1.25f)*.91f;
+        fbR=std::tanh((.8f*dr+.2f*dl)*1.25f)*.91f;
+    }
+    delayL[delayPos]=juce::jlimit(-8.f,8.f,delSendL+fbL*delayFeedback);
+    delayR[delayPos]=juce::jlimit(-8.f,8.f,delSendR+fbR*delayFeedback);
     delayPos=(delayPos+1)%delayL.size();
-    if(delayEnabled){l+=dl*delayMix;r+=dr*delayMix;}
+    if(delayEnabled){
+        if(delayMode==3){
+            if(delayHoldCountdown--<=0){
+                delayHoldL=dl;delayHoldR=dr;
+                delayHoldCountdown=juce::jmax(1,(int)(sr*60.0/juce::jmax(20.0,bpm)/4.0));
+            }
+            // Short interpolation prevents clicks while preserving stepped character.
+            delayHoldSmoothL+=delayHoldSlew*(delayHoldL-delayHoldSmoothL);
+            delayHoldSmoothR+=delayHoldSlew*(delayHoldR-delayHoldSmoothR);
+            dl=delayHoldSmoothL;dr=delayHoldSmoothR;
+        }
+        l+=dl*delayMix;r+=dr*delayMix;
+    }
    }
    if(reverbEnabled){l+=wetL;r+=wetR;}
    if(chorusEnabled&&chorusMix>.001f){
@@ -544,5 +577,5 @@ private:
  }
  void applyRandomArtifact(float&l,float&r){if(!seedRandomize||artifactRemaining<=0)return;--artifactRemaining;const float wet=artifactWet;if(artifactMode==0){const float cut=artifactRemaining>0?0.0f:1.0f;l=l*(1.0f-wet+wet*cut);r=r*(1.0f-wet+wet*cut);}else if(artifactMode==1){if(--artifactCounter<=0){artifactCounter=artifactPeriod;artifactHoldL=l;artifactHoldR=r;}l=l*(1.0f-wet)+artifactHoldL*wet;r=r*(1.0f-wet)+artifactHoldR*wet;}else{l=l*(1.0f-wet)+std::round(l*artifactScale)/artifactScale*wet;r=r*(1.0f-wet)+std::round(r*artifactScale)/artifactScale*wet;}}
  void initialiseFactoryPatterns(){for(int q=0;q<patterns;q++){auto&p=pats[q];p.length=16;for(int s=0;s<16;s++){p.step[0][s].on=s%4==0;p.step[1][s].on=s==4||s==12;p.step[3][s].on=s%2==0;p.step[4][s].on=(q%2)&&s%4==2;p.step[7][s].on=(q%3==2)&&(s==7||s==15);}}}
- double sr=44100,bpm=120,samplesToStep=0,hostPpq=0;float swing=0,complexity=.5f,syncopation=.25f,humanize=.15f,chaos=.1f,kickStability=.85f,snareStability=.9f,hatActivity=.65f,percActivity=.35f,compressorEnvelope=0;bool hostPlaying=false,hasPpq=false;std::atomic<bool>previewPlaying{false};std::array<int,voices>trackStep{},pendingStep{},pendingFlam{},pendingRatchet{},ratchetCounter{},ratchetInterval{},pendingMicro{};std::array<double,voices>trackSamplesToStep{};std::array<float,voices>pendingVelocity{};std::array<int,voices>pendingNote{};int pendingPattern=-1,barTicks=0;ChangeMode changeMode=ChangeMode::EndPattern;juce::Reverb reverb;std::vector<float>delayL,delayR;size_t delayPos=0;DrumExtendedFX extendedFx;double delayReadSamples=0.0;float delayToneL=0,delayToneR=0,delayHoldL=0,delayHoldR=0,delayHoldSmoothL=0,delayHoldSmoothR=0;int delayHoldCountdown=0;struct OnePole{float z=0,coefficient=.08f;float process(float x){z+=coefficient*(x-z);return z;}}masterLow{0,.032f},masterMidLow{0,.22f},masterDJLeft{},masterDJRight{};int current=0,step=-1;juce::Random random;std::array<VoiceDSP,voices>dsp{};std::array<SampleSlot,3>samples{};std::array<float,3>sampleVelocity{1,1,1};std::array<float,voices> accentGain{1,1,1,1,1,1,1,1,1,1,1,1};std::array<juce::String,3>sampleNames{};std::unique_ptr<Pattern[]>pats=std::make_unique<Pattern[]>(patterns);std::array<float,voices>channelLP{};
+ double sr=44100,bpm=120,samplesToStep=0,hostPpq=0;float swing=0,complexity=.5f,syncopation=.25f,humanize=.15f,chaos=.1f,kickStability=.85f,snareStability=.9f,hatActivity=.65f,percActivity=.35f,compressorEnvelope=0;bool hostPlaying=false,hasPpq=false;std::atomic<bool>previewPlaying{false};std::array<int,voices>trackStep{},pendingStep{},pendingFlam{},pendingRatchet{},ratchetCounter{},ratchetInterval{},pendingMicro{};std::array<double,voices>trackSamplesToStep{};std::array<float,voices>pendingVelocity{};std::array<int,voices>pendingNote{};int pendingPattern=-1,barTicks=0;ChangeMode changeMode=ChangeMode::EndPattern;juce::Reverb reverb;std::vector<float>delayL,delayR;size_t delayPos=0;DrumExtendedFX extendedFx;double delayReadSamples=0.0,delayTimeSlew=.001;float delayHoldSlew=.01f;float delayToneL=0,delayToneR=0,delayHoldL=0,delayHoldR=0,delayHoldSmoothL=0,delayHoldSmoothR=0;int delayHoldCountdown=0;struct OnePole{float z=0,coefficient=.08f;float process(float x){z+=coefficient*(x-z);return z;}}masterLow{0,.032f},masterMidLow{0,.22f},masterDJLeft{},masterDJRight{};int current=0,step=-1;juce::Random random;std::array<VoiceDSP,voices>dsp{};std::array<SampleSlot,3>samples{};std::array<float,3>sampleVelocity{1,1,1};std::array<float,voices> accentGain{1,1,1,1,1,1,1,1,1,1,1,1};std::array<juce::String,3>sampleNames{};std::unique_ptr<Pattern[]>pats=std::make_unique<Pattern[]>(patterns);std::array<float,voices>channelLP{};
 };
