@@ -44,17 +44,8 @@ JerzyComposerEditor::JerzyComposerEditor(JerzyComposerProcessor& p)
     enabled.setColour(juce::ToggleButton::textColourId,textColor);
     enabled.setColour(juce::ToggleButton::tickColourId,accent);
     addAndMakeVisible(enabled);
-    // Keep attachment alive for the lifetime of the toggle, not temporary.
-    static_assert(sizeof(ButtonAttachment)>0,"JUCE attachments available");
-    enabled.onClick=[this] {
-        if(auto* param=processor.parameters().getParameter("enabled")) {
-            param->beginChangeGesture();
-            param->setValueNotifyingHost(enabled.getToggleState()?1.f:0.f);
-            param->endChangeGesture();
-        }
-    };
-    if(auto* state=processor.parameters().getRawParameterValue("enabled"))
-        enabled.setToggleState(state->load()>=.5f,juce::dontSendNotification);
+    enabledAttachment=std::make_unique<ButtonAttachment>(
+        processor.parameters(),"enabled",enabled);
     newIdea.setButtonText("NOWY POMYSŁ");
     newIdea.setColour(juce::TextButton::buttonColourId,juce::Colour(0xff22564f));
     newIdea.setColour(juce::TextButton::textColourOffId,juce::Colours::white);
