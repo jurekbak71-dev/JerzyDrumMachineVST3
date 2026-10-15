@@ -80,7 +80,7 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  loadSample.onClick=[this]{if(selected<8||selected>10)return;chooser=std::make_unique<juce::FileChooser>("Load WAV sample",juce::File{},"*.wav;*.aif;*.aiff");auto flags=juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles;chooser->launchAsync(flags,[this](const juce::FileChooser&fc){auto file=fc.getResult();if(file.existsAsFile())p.engine.loadSample(selected-8,file);repaint();});};
 
  for(int i=0;i<12;i++){
-  for(auto*s:{&channelGain[i],&channelPan[i],&channelFilter[i],&channelDrive[i],&revSend[i],&delSend[i]}){addAndMakeVisible(*s);s->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s->setTextBoxStyle(juce::Slider::NoTextBox,false,0,0);s->setColour(juce::Slider::rotarySliderFillColourId,channelColours[(size_t)i]);}
+  for(auto*s:{&channelGain[i],&channelPan[i],&channelFilter[i],&channelDrive[i],&revSend[i],&delSend[i],&chorusSend[i],&tapeSend[i]}){addAndMakeVisible(*s);s->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s->setTextBoxStyle(juce::Slider::NoTextBox,false,0,0);s->setColour(juce::Slider::rotarySliderFillColourId,channelColours[(size_t)i]);}
   addAndMakeVisible(channelMute[i]);addAndMakeVisible(channelSolo[i]);channelMute[i].setButtonText("M");channelSolo[i].setButtonText("S");channelMute[i].setClickingTogglesState(true);channelSolo[i].setClickingTogglesState(true);
   channelGain[i].setRange(0,1.5,.01);channelGain[i].setValue(p.engine.gain[i]);channelGain[i].onValueChange=[this,i]{p.engine.gain[i]=(float)channelGain[i].getValue();};
   channelPan[i].setRange(-1,1,.01);channelPan[i].setValue(p.engine.panorama[i]);channelPan[i].onValueChange=[this,i]{p.engine.panorama[i]=(float)channelPan[i].getValue();};
@@ -88,6 +88,8 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
   channelDrive[i].setRange(0,1,.01);channelDrive[i].setValue(p.engine.channelDrive[i]);channelDrive[i].onValueChange=[this,i]{p.engine.channelDrive[i]=(float)channelDrive[i].getValue();};
   revSend[i].setRange(0,1,.01);revSend[i].setValue(p.engine.reverbSend[i]);revSend[i].onValueChange=[this,i]{p.engine.reverbSend[i]=(float)revSend[i].getValue();};
   delSend[i].setRange(0,1,.01);delSend[i].setValue(p.engine.delaySend[i]);delSend[i].onValueChange=[this,i]{p.engine.delaySend[i]=(float)delSend[i].getValue();};
+  chorusSend[i].setRange(0,1,.01);chorusSend[i].setTooltip("Per-instrument Chorus/Widener send");chorusSend[i].setValue(0.0);
+  tapeSend[i].setRange(0,1,.01);tapeSend[i].setTooltip("Per-instrument Tape Drive send");tapeSend[i].setValue(0.0);
   channelMute[i].setToggleState(p.engine.mute[i],juce::dontSendNotification);channelSolo[i].setToggleState(p.engine.solo[i],juce::dontSendNotification);
   channelMute[i].setColour(juce::TextButton::buttonColourId,juce::Colour(0xff3a1111));channelMute[i].setColour(juce::TextButton::buttonOnColourId,juce::Colour(0xffd53932));channelMute[i].setColour(juce::TextButton::textColourOffId,juce::Colour(0xffffb0a6));channelMute[i].setColour(juce::TextButton::textColourOnId,juce::Colours::white);
   channelSolo[i].setColour(juce::TextButton::buttonColourId,juce::Colour(0xff102a46));channelSolo[i].setColour(juce::TextButton::buttonOnColourId,juce::Colour(0xff347ed1));channelSolo[i].setColour(juce::TextButton::textColourOffId,juce::Colour(0xffa7d3ff));channelSolo[i].setColour(juce::TextButton::textColourOnId,juce::Colours::white);
@@ -96,6 +98,20 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  addAndMakeVisible(masterDrive);masterDrive.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);masterDrive.setTextBoxStyle(juce::Slider::TextBoxBelow,false,62,18);masterDrive.setRange(.5,3,.01);masterDrive.setValue(p.engine.drive);masterDrive.onValueChange=[this]{p.engine.drive=(float)masterDrive.getValue();};
  addAndMakeVisible(masterFilter);masterFilter.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);masterFilter.setTextBoxStyle(juce::Slider::TextBoxBelow,false,62,18);masterFilter.setRange(0.0,1.0,.001);masterFilter.setValue(p.engine.masterFilter);masterFilter.setTooltip("DJ filter: left is low-pass, centre is neutral, right is high-pass.");
  for(auto&s:fxParam){addAndMakeVisible(s);s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s.setTextBoxStyle(juce::Slider::TextBoxBelow,false,62,18);}
+ for(auto&s:extraFxParam){addAndMakeVisible(s);s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s.setTextBoxStyle(juce::Slider::TextBoxBelow,false,59,17);s.setRange(0,1,.01);}
+ const char* extraIds[]={"chorus_mix","chorus_depth","chorus_width","tape_mix","tape_age","tape_wear","tape_filter"};
+ const float defaults[]={.35f,.45f,.6f,.25f,.42f,.3f,.75f};
+ for(int i=0;i<7;++i){extraFxParam[(size_t)i].setValue(defaults[i]);extraFxAtt[(size_t)i]=std::make_unique<SliderAttachment>(p.apvts,extraIds[i],extraFxParam[(size_t)i]);}
+ for(auto* btn:{&chorusEnable,&tapeEnable}){addAndMakeVisible(*btn);btn->setClickingTogglesState(true);}
+ extraFxButtonAtt[0]=std::make_unique<ButtonAttachment>(p.apvts,"chorus_on",chorusEnable);
+ extraFxButtonAtt[1]=std::make_unique<ButtonAttachment>(p.apvts,"tape_on",tapeEnable);
+ addAndMakeVisible(delayMode);
+ const char* modes[]={"CLASSIC / PING-PONG","STEREO","TAPE ECHO","SAMPLE & HOLD","DIFFUSE DUB"};
+ for(int i=0;i<5;++i)delayMode.addItem(modes[i],i+1);
+ delayMode.setSelectedId(1);
+ delayModeAtt=std::make_unique<ComboAttachment>(p.apvts,"delay_mode",delayMode);
+ delayMode.setTooltip("Classic, Stereo, Tape Echo, tempo-locked Sample & Hold, Diffuse Dub");
+
  reverbEnable.setClickingTogglesState(true);delayEnable.setClickingTogglesState(true);delayPingPong.setClickingTogglesState(true);compressorEnable.setClickingTogglesState(true);
  for(auto*b:{&reverbEnable,&delayEnable,&delayPingPong,&compressorEnable})addAndMakeVisible(*b);
  fxParam[0].setRange(0,1,.01);fxParam[0].setValue(p.engine.reverbSize);fxParam[1].setRange(0,1,.01);fxParam[1].setValue(p.engine.reverbDamping);fxParam[2].setRange(0,1,.01);fxParam[2].setValue(p.engine.reverbMix);
@@ -111,7 +127,7 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  auto updComp=[this]{p.engine.setCompressor(compressorEnable.getToggleState(),(float)fxParam[8].getValue(),(float)fxParam[9].getValue(),(float)fxParam[10].getValue(),(float)fxParam[11].getValue());};for(int i=8;i<=11;i++)fxParam[(size_t)i].onValueChange=updComp;compressorEnable.onClick=updComp;
  fxParam[13].onValueChange=[this]{p.engine.setCompressorBoost((float)fxParam[13].getValue());};
  reverbEnable.onClick=[this]{p.engine.setReverbEnabled(reverbEnable.getToggleState());};delayEnable.onClick=[this]{p.engine.setDelayEnabled(delayEnable.getToggleState());};delayPingPong.onClick=[this]{p.engine.setDelayPingPong(delayPingPong.getToggleState());};
- for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";gainAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"gain",channelGain[i]);panAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"pan",channelPan[i]);filterAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"filter",channelFilter[i]);driveAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"drive",channelDrive[i]);revAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"rev",revSend[i]);delAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"del",delSend[i]);muteAtt[i]=std::make_unique<ButtonAttachment>(p.apvts,prefix+"mute",channelMute[i]);soloAtt[i]=std::make_unique<ButtonAttachment>(p.apvts,prefix+"solo",channelSolo[i]);}
+ for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";gainAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"gain",channelGain[i]);panAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"pan",channelPan[i]);filterAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"filter",channelFilter[i]);driveAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"drive",channelDrive[i]);revAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"rev",revSend[i]);delAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"del",delSend[i]);chorusAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"chorus",chorusSend[i]);tapeAtt[i]=std::make_unique<SliderAttachment>(p.apvts,prefix+"tape",tapeSend[i]);muteAtt[i]=std::make_unique<ButtonAttachment>(p.apvts,prefix+"mute",channelMute[i]);soloAtt[i]=std::make_unique<ButtonAttachment>(p.apvts,prefix+"solo",channelSolo[i]);}
  masterDriveAtt=std::make_unique<SliderAttachment>(p.apvts,"drive",masterDrive);
  masterFilterAtt=std::make_unique<SliderAttachment>(p.apvts,"master_filter",masterFilter);
  static const char*fxIds[]={"rev_size","rev_damp","rev_mix","delay_beats","delay_fb","delay_mix","master_bass","master_treble","comp_threshold","comp_ratio","comp_attack","comp_release","master_comp","comp_boost","master_mid"};for(int i=0;i<15;i++)fxAtt[(size_t)i]=std::make_unique<SliderAttachment>(p.apvts,fxIds[i],fxParam[(size_t)i]);
