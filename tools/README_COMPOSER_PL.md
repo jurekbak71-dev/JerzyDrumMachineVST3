@@ -1,4 +1,4 @@
-# Jerzy Composer — Windows x64 (wersja rozwojowa 0.4)
+# Jerzy Composer — Windows x64 (wersja rozwojowa 0.5)
 
 Projekt jest odizolowany w katalogu tools/ i nie zastępuje Jerzy Drum Machine VST3.
 
@@ -7,8 +7,10 @@ Projekt jest odizolowany w katalogu tools/ i nie zastępuje Jerzy Drum Machine V
 ### Jerzy Composer Piano Roll 0.3 (.pyscript)
 Tworzy nuty bezpośrednio w Piano Roll FL Studio: perkusja, bas, akordy, arpeggio i melodia. Tonika wybierana jako C, Cis/Des, D, Dis/Es, E, F, Fis/Ges, G, Gis/As, A, Ais/B lub H; osobno oktawa. Jest 7 skal, 7 progresji, 8 stylów, swing, gęstość, artykulacja i wariacje. Uwaga: zaznaczenie "Zastąp istniejące nuty" może usunąć wszystkie nuty z aktywnego rolla. Pracuj na kopii.
 
-### Jerzy Composer VST3 0.4
+### Jerzy Composer VST3 0.5
 VST3 to **generator MIDI, nie syntezator audio**. Domyślny JUCE Generic Editor zastąpiono responsywnym panelem po polsku, ze sterowaniem C–H + oktawa, progresją i typem akordu, ośmioma groove, długością frazy, swingiem, naturalnością i wariacjami.
+
+Nowe 0.5: **WARTOŚĆ NUTY** Auto, 1/32, 1/16T, 1/16, 1/8T, 1/8, 1/4, 1/2, 1 lub 2 takty. **GATE** 10–200% niezależny od wyboru wartości nuty. **ZMIENNOŚĆ DŁUGOŚCI** 0–100% daje rzeczywiste różnice między kolejnymi nutami. **MODEL RYTMU**: stylowy, half-time, synkopowany, triolowy, euklidesowy 5/16 lub broken/bounce. **SYNKOPACJA**, **DYNAMIKA**, **SIŁA AKCENTÓW**, **GHOST NOTES** zmieniają prawdziwe zdarzenia MIDI. Wszystkie parametry są automatyzowalne.
 
 Pięć trybów: Perkusja / Bas / Akordy / Arpeggio / Melodia. Bas i harmonia podążają za akordami, melodia stosuje motywy, przerwy i rozwiązania fraz. Generator uwzględnia BPM, metrum, pozycję transportu i wejściowe MIDI w arpeggiatorze. Sygnał audio na wyjściu VST3 jest celowo cichy. Parametry są automatyzowalne i zapisują się w projekcie.
 
@@ -32,7 +34,9 @@ Aplikacja .NET 8 Windows x64: instaluje pięć skryptów Piano Roll, generuje MI
 ## Co robią parametry?
 - TONIKA / DŹWIĘK = podstawowa nuta np. C, D lub E; REJESTR = oktawa C2–C6.
 - SKALA = zbiór dostępnych wysokości; PROGRESJA = następstwo akordów w taktach.
-- GĘSTOŚĆ = ile nut i pauz; SWING = kołysanie; NATURALNOŚĆ = subtelne różnice velocity i timingu.
+- GĘSTOŚĆ = liczba nut i pauz; SWING = kołysanie; NATURALNOŚĆ = niewielkie odchylenia czasu i siły.
+- WARTOŚĆ NUTY = długość bazowa niezależna od rytmicznego podziału; ZMIENNOŚĆ DŁUGOŚCI = odstępstwa od wybranej wartości; GATE = procent długości (10–200).
+- SYNKOPACJA = przesuwanie słabszych uderzeń; DYNAMIKA = rozpiętość velocity; AKCENTY = nacisk na mocne części taktu; GHOST NOTES = ciche przednutki.
 - RODZAJ AKORDU = triada, 7, sus, add9; UKŁAD HARMONII = bliski, szeroki albo płynne przejścia.
 - WARIACJE FRAZY = urozmaicenie powracających motywów; DŁUGOŚĆ NUT = staccato/legato.
 - WARIANT / SEED = powtarzalny wariant generowania; KANAŁ MIDI (1–16) nie jest portem wrappera FL Studio.
