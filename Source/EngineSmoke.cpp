@@ -74,12 +74,24 @@ int main()
     auto clickText=[&](const juce::String& label)->bool {
       for(int i=0;i<editor->getNumChildComponents();++i)
         if(auto* b=dynamic_cast<juce::Button*>(editor->getChildComponent(i));
-            b&&b->getButtonText()==label){b->triggerClick();return true;}
+            b&&b->getButtonText()==label){
+          b->triggerClick();
+          // JUCE delivers Button::triggerClick via the MessageManager queue.
+          // The smoke test is a console app, so pump messages explicitly.
+          juce::MessageManager::getInstance()->runDispatchLoopUntil(25);
+          return true;
+        }
       return false;
     };
-    if(!clickText("COPY 16")||!clickText("17-32")||!clickText("PASTE 16")||
+    const bool copied=clickText("COPY 16");
+    const bool selectedDestination=clickText("17-32");
+    const bool pasted=clickText("PASTE 16");
+    if(!copied||!selectedDestination||!pasted||
        !pat.step[0][16].on||std::abs(pat.step[0][16].velocity-.71f)>.001f){
-       log("FAIL: GUI Copy 1-16 -> Paste 17-32");return 56;
+       log("FAIL: GUI Copy 1-16 -> Paste 17-32 (copy="+std::to_string(copied)+
+           ", bank="+std::to_string(selectedDestination)+", paste="+std::to_string(pasted)+
+           ", note="+std::to_string(pat.step[0][16].on)+
+           ", velocity="+std::to_string(pat.step[0][16].velocity)+")");return 56;
     }
     if(!clickText("CLEAR SEQ")||pat.step[0][0].on||pat.step[0][16].on||!pat.step[1][0].on){
        log("FAIL: GUI CLEAR TRACK affected other voice");return 57;
@@ -96,7 +108,7 @@ int main()
     bool clickedFX=false,hasChorus=false,hasTape=false,hasModes=false;
     for(int i=0;i<editor->getNumChildComponents();++i)
         if(auto* b=dynamic_cast<juce::Button*>(editor->getChildComponent(i));
-           b&&b->getButtonText()=="FX"){b->triggerClick();clickedFX=true;break;}
+           b&&b->getButtonText()=="FX"){b->triggerClick();juce::MessageManager::getInstance()->runDispatchLoopUntil(25);clickedFX=true;break;}
     for(int i=0;i<editor->getNumChildComponents();++i){
         auto* component=editor->getChildComponent(i);
         if(auto* b=dynamic_cast<juce::Button*>(component)){
