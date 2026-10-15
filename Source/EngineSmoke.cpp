@@ -90,6 +90,26 @@ int main()
   }
   bool joinedBanks=false;for(int i=0;i<editor->getNumChildComponents();++i)if(auto*button=dynamic_cast<juce::Button*>(editor->getChildComponent(i));button&&button->getComponentID()=="joinBanks64"){joinedBanks=true;break;}if(auto*editorView=dynamic_cast<JerzyDrumMachineAudioProcessorEditor*>(editor.get()))editorView->joinBanksTo64Steps();else joinedBanks=false;if(!joinedBanks||processor->engine.pattern(0).length!=64){log("FAIL: GUI bank join did not make a 64-step pattern");return 21;}for(int v=0;v<DrumEngine::voices;v++)if(processor->engine.pattern(0).trackLength[(size_t)v]!=64){log("FAIL: joined 64-step pattern did not extend default instrument tracks");return 22;}
   for(const auto*pageName:{"SEQ","SOUND","MIX","FX","DRUMMER","SONG"}){bool clicked=false;for(int i=0;i<editor->getNumChildComponents();++i)if(auto*button=dynamic_cast<juce::Button*>(editor->getChildComponent(i));button&&button->getButtonText()==pageName){button->triggerClick();clicked=true;break;}if(!clicked||visibleChildren()>140){log("FAIL: page navigation exposed overlapping layouts");return 16;}}
+  // GUI regression: both new effect toggles and a five-mode delay must be
+  // visible in the FX rack (not just bound as hidden host parameters).
+  {
+    bool clickedFX=false,hasChorus=false,hasTape=false,hasModes=false;
+    for(int i=0;i<editor->getNumChildComponents();++i)
+        if(auto* b=dynamic_cast<juce::Button*>(editor->getChildComponent(i));
+           b&&b->getButtonText()=="FX"){b->triggerClick();clickedFX=true;break;}
+    for(int i=0;i<editor->getNumChildComponents();++i){
+        auto* component=editor->getChildComponent(i);
+        if(auto* b=dynamic_cast<juce::Button*>(component)){
+            hasChorus|=b->isVisible()&&b->getButtonText()=="CHORUS ON";
+            hasTape|=b->isVisible()&&b->getButtonText()=="TAPE ON";
+        }
+        if(auto* combo=dynamic_cast<juce::ComboBox*>(component))
+            hasModes|=combo->isVisible()&&combo->getNumItems()==5;
+    }
+    if(!clickedFX||!hasChorus||!hasTape||!hasModes){
+        log("FAIL: FX GUI missing Chorus, Tape or Delay modes");return 59;
+    }
+  }
   auto auditionProcessor=std::make_unique<JerzyDrumMachineAudioProcessor>();auditionProcessor->prepareToPlay(48000.0,512);std::unique_ptr<juce::AudioProcessorEditor> auditionEditor(auditionProcessor->createEditor());bool synthClicked=false;for(int i=0;i<auditionEditor->getNumChildComponents();++i)if(auto*button=dynamic_cast<juce::Button*>(auditionEditor->getChildComponent(i));button&&button->getButtonText()=="SYNTH"){button->triggerClick();synthClicked=true;break;}if(!synthClicked){log("FAIL: could not click synth preview in the editor");return 23;}juce::AudioBuffer<float> auditionAudio(2,512);juce::MidiBuffer noMidi;double auditionEnergy=0;for(int block=0;block<48;block++){auditionProcessor->processBlock(auditionAudio,noMidi);for(int c=0;c<2;c++)for(int i=0;i<auditionAudio.getNumSamples();i++)auditionEnergy+=std::abs(auditionAudio.getSample(c,i));}if(auditionEnergy<1.0){log("FAIL: synth GUI audition produced no plug-in output");return 24;}
   // Bank copy MUST paste only a bank, not replace a 64-step track.
   {
