@@ -62,6 +62,62 @@ public:
  float getVoiceParam(int i,int param)const{if(i<0||i>=voices)return .5f;auto const&v=dsp[(size_t)i];return param==0?v.tune:param==1?v.decay:param==2?v.tone:v.character;}
  juce::ValueTree saveState()const{juce::ValueTree root("ENGINE");root.setProperty("pattern",current,nullptr);root.setProperty("changeMode",(int)changeMode,nullptr);root.setProperty("masterBass",masterBass,nullptr);root.setProperty("masterTreble",masterTreble,nullptr);root.setProperty("masterComp",masterComp,nullptr);root.setProperty("reverbSize",reverbSize,nullptr);root.setProperty("reverbDamping",reverbDamping,nullptr);root.setProperty("delayBeats",delayBeats,nullptr);root.setProperty("delayFeedback",delayFeedback,nullptr);root.setProperty("delayMix",delayMix,nullptr);for(int v=0;v<voices;v++){juce::ValueTree voice("VOICE");voice.setProperty("index",v,nullptr);if(v>=8&&v<=10)voice.setProperty("samplePath",samples[(size_t)(v-8)].sourcePath,nullptr);voice.setProperty("gain",gain[v],nullptr);voice.setProperty("pan",panorama[v],nullptr);voice.setProperty("rev",reverbSend[v],nullptr);voice.setProperty("del",delaySend[v],nullptr);voice.setProperty("filter",channelFilter[v],nullptr);voice.setProperty("drive",channelDrive[v],nullptr);voice.setProperty("mute",mute[v],nullptr);voice.setProperty("solo",solo[v],nullptr);voice.setProperty("tune",dsp[v].tune,nullptr);voice.setProperty("decay",dsp[v].decay,nullptr);voice.setProperty("tone",dsp[v].tone,nullptr);voice.setProperty("char",dsp[v].character,nullptr);root.addChild(voice,-1,nullptr);}for(int pidx=0;pidx<patterns;pidx++){juce::ValueTree pat("PATTERN");pat.setProperty("index",pidx,nullptr);pat.setProperty("length",pats[pidx].length,nullptr);for(int v=0;v<voices;v++)for(int s=0;s<64;s++){auto const&st=pats[pidx].step[v][s];if(st.on||st.velocity!=.85f||st.probability!=1.f||st.ratchet!=1||st.micro!=0.f||st.accent||st.flam){juce::ValueTree n("STEP");n.setProperty("v",v,nullptr);n.setProperty("s",s,nullptr);n.setProperty("on",st.on,nullptr);n.setProperty("vel",st.velocity,nullptr);n.setProperty("prob",st.probability,nullptr);n.setProperty("rat",st.ratchet,nullptr);n.setProperty("micro",st.micro,nullptr);n.setProperty("accent",st.accent,nullptr);n.setProperty("flam",st.flam,nullptr);pat.addChild(n,-1,nullptr);}}root.addChild(pat,-1,nullptr);}return root;}
  void loadState(const juce::ValueTree&root){if(!root.isValid())return;current=(int)root.getProperty("pattern",0);changeMode=(ChangeMode)(int)root.getProperty("changeMode",(int)ChangeMode::EndPattern);masterBass=(float)root.getProperty("masterBass",1.0);masterTreble=(float)root.getProperty("masterTreble",1.0);masterComp=(float)root.getProperty("masterComp",1.35);reverbSize=(float)root.getProperty("reverbSize",.45);reverbDamping=(float)root.getProperty("reverbDamping",.55);delayBeats=(float)root.getProperty("delayBeats",.75);delayFeedback=(float)root.getProperty("delayFeedback",.36);delayMix=(float)root.getProperty("delayMix",.45);setReverb(reverbSize,reverbDamping);for(auto child:root){if(child.hasType("VOICE")){int v=(int)child.getProperty("index",-1);if(v>=0&&v<voices){gain[v]=(float)child.getProperty("gain",1.0);panorama[v]=(float)child.getProperty("pan",0.0);reverbSend[v]=(float)child.getProperty("rev",0.1);delaySend[v]=(float)child.getProperty("del",0.0);channelFilter[v]=(float)child.getProperty("filter",0.0);channelDrive[v]=(float)child.getProperty("drive",0.0);mute[v]=(bool)child.getProperty("mute",false);solo[v]=(bool)child.getProperty("solo",false);dsp[v].tune=(float)child.getProperty("tune",.5);dsp[v].decay=(float)child.getProperty("decay",.5);dsp[v].tone=(float)child.getProperty("tone",.5);dsp[v].character=(float)child.getProperty("char",.5);if(v>=8&&v<=10){auto path=child.getProperty("samplePath").toString();if(path.isNotEmpty()){juce::File file(path);if(file.existsAsFile())loadSample(v-8,file);}}}}else if(child.hasType("PATTERN")){int pidx=(int)child.getProperty("index",-1);if(pidx>=0&&pidx<patterns){pats[pidx]=Pattern{};pats[pidx].length=juce::jlimit(1,64,(int)child.getProperty("length",16));for(auto n:child){if(!n.hasType("STEP"))continue;int v=(int)n.getProperty("v",-1),s=(int)n.getProperty("s",-1);if(v<0||v>=voices||s<0||s>=64)continue;auto&st=pats[pidx].step[v][s];st.on=(bool)n.getProperty("on",false);st.velocity=(float)n.getProperty("vel",.85);st.probability=(float)n.getProperty("prob",1.0);st.ratchet=(int)n.getProperty("rat",1);st.micro=(float)n.getProperty("micro",0.0);st.accent=(bool)n.getProperty("accent",false);st.flam=(bool)n.getProperty("flam",false);}}}}}
+ // FL Studio bridge: MIDI import/export of the active 12-voice step pattern.
+ // Per-track triplets are preserved in external Piano Roll MIDI; this grid is 1/16 only.
+ bool importMidiPattern(const juce::File& file,int destination){
+  juce::FileInputStream input(file);
+  if(!input.openedOk())return false;
+  juce::MidiFile midi;
+  if(!midi.readFrom(input)||midi.getTimeFormat()<=0)return false;
+  Pattern imported{};
+  imported.length=16;
+  int added=0;
+  for(int t=0;t<midi.getNumTracks();++t){
+   const auto* track=midi.getTrack(t);
+   if(!track)continue;
+   for(int i=0;i<track->getNumEvents();++i){
+    const auto& msg=track->getEventPointer(i)->message;
+    if(!msg.isNoteOn())continue;
+    const int voice=msg.getNoteNumber()-36;
+    if(voice<0||voice>=voices)continue;
+    const int stepIndex=juce::roundToInt(msg.getTimeStamp()*4.0/midi.getTimeFormat());
+    if(stepIndex<0||stepIndex>=64)continue;
+    auto& s=imported.step[(size_t)voice][(size_t)stepIndex];
+    s.on=true;
+    s.velocity=juce::jlimit(0.0f,1.0f,msg.getFloatVelocity());
+    imported.length=juce::jmax(imported.length,stepIndex+1);
+    ++added;
+   }
+  }
+  if(added==0)return false;
+  pattern(destination)=imported;
+  return true;
+ }
+ bool exportMidiPattern(const juce::File& target,int source)const{
+  juce::MidiMessageSequence sequence;
+  const auto& pat=pats[(size_t)juce::jlimit(0,patterns-1,source)];
+  for(int voice=0;voice<voices;++voice)for(int stepIndex=0;stepIndex<pat.length;++stepIndex){
+   const auto& s=pat.step[(size_t)voice][(size_t)stepIndex];
+   if(!s.on)continue;
+   auto on=juce::MidiMessage::noteOn(1,36+voice,
+      (juce::uint8)juce::jlimit(1,127,juce::roundToInt(s.velocity*127.0f)));
+   const double tick=stepIndex*240.0;
+   on.setTimeStamp(tick);
+   sequence.addEvent(on);
+   auto off=juce::MidiMessage::noteOff(1,36+voice);
+   off.setTimeStamp(tick+120.0);
+   sequence.addEvent(off);
+  }
+  sequence.sort();
+  juce::MidiFile midi;
+  midi.setTicksPerQuarterNote(960);
+  midi.addTrack(sequence);
+  juce::TemporaryFile tmp(target);
+  juce::FileOutputStream out(tmp.getFile());
+  if(!out.openedOk()||!midi.writeTo(out))return false;
+  out.flush();
+  return tmp.overwriteTargetFileWithTemporary();
+ }
  bool loadSample(int slot,const juce::File& file){if(slot<0||slot>=3)return false;juce::AudioFormatManager fm;fm.registerBasicFormats();std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(file));if(!r)return false;auto&ss=samples[(size_t)slot];ss.audio.setSize(1,(int)r->lengthInSamples);r->read(&ss.audio,0,(int)r->lengthInSamples,0,true,false);ss.sourceRate=r->sampleRate;ss.loaded=true;ss.active=false;ss.sourcePath=file.getFullPathName();sampleNames[(size_t)slot]=file.getFileName();return true;}
  juce::String getSampleName(int slot)const{return slot>=0&&slot<3?sampleNames[(size_t)slot]:juce::String();}
  void setGenerator(float complexityIn,float syncopationIn,float humanizeIn,float chaosIn,float kickStableIn,float snareStableIn,float hatActivityIn,float percActivityIn){complexity=complexityIn;syncopation=syncopationIn;humanize=humanizeIn;chaos=chaosIn;kickStability=kickStableIn;snareStability=snareStableIn;hatActivity=hatActivityIn;percActivity=percActivityIn;}
