@@ -118,10 +118,35 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  fxButtonAtt[0]=std::make_unique<ButtonAttachment>(p.apvts,"reverb_on",reverbEnable);fxButtonAtt[1]=std::make_unique<ButtonAttachment>(p.apvts,"delay_on",delayEnable);fxButtonAtt[2]=std::make_unique<ButtonAttachment>(p.apvts,"delay_pingpong",delayPingPong);fxButtonAtt[3]=std::make_unique<ButtonAttachment>(p.apvts,"comp_on",compressorEnable);
 
  for(auto* b:{&copyTrack,&pasteTrack,&duplicateTrack})addAndMakeVisible(*b);
- copyTrack.onClick=[this]{const auto& pat=p.engine.pattern(p.engine.getPattern());copiedTrack=pat.step[(size_t)selected];copiedLength=pat.trackLength[(size_t)selected];copiedTriplet=pat.trackTriplet[(size_t)selected];hasCopiedTrack=true;};
- pasteTrack.onClick=[this]{if(!hasCopiedTrack)return;auto& pat=p.engine.pattern(p.engine.getPattern());pat.step[(size_t)selected]=copiedTrack;p.engine.setTrackLength(p.engine.getPattern(),selected,copiedLength);p.engine.setTrackTriplet(selected,copiedTriplet);trackLength.setValue(copiedLength,juce::dontSendNotification);seqDivision.setSelectedId(copiedTriplet?2:1,juce::dontSendNotification);syncVisibleSteps();syncStepControls();repaint();};
+ copyTrack.setTooltip("Copies the 16 steps visible in the CURRENT bank, for the selected instrument.");
+ copyTrack.onClick=[this]{
+    copiedTrack=p.engine.copyBank(p.engine.getPattern(),selected,bank);
+    copiedVoice=selected;copiedBank=bank;hasCopiedTrack=true;
+    pasteTrack.setTooltip("Paste "+juce::String(copiedBank*16+1)+"-"+juce::String(copiedBank*16+16)+" into selected bank.");
+ };
+ pasteTrack.setTooltip("Choose target bank (e.g. 17-32) then paste the copied 16 steps.");
+ pasteTrack.onClick=[this]{
+    if(!hasCopiedTrack)return;
+    p.engine.pasteBank(p.engine.getPattern(),selected,bank,copiedTrack);
+    const auto& pat=p.engine.pattern(p.engine.getPattern());
+    trackLength.setValue(pat.trackLength[(size_t)selected],juce::dontSendNotification);
+    patternLength.setValue(pat.length,juce::dontSendNotification);
+    syncVisibleSteps();syncStepControls();repaint();
+ };
  duplicateTrack.onClick=[this]{auto& pat=p.engine.pattern(p.engine.getPattern());auto& tr=pat.step[(size_t)selected];const int len=juce::jlimit(1,32,pat.trackLength[(size_t)selected]);for(int s=0;s<len&&s+len<64;s++)tr[(size_t)(s+len)]=tr[(size_t)s];p.engine.setTrackLength(p.engine.getPattern(),selected,juce::jmin(64,len*2));trackLength.setValue(juce::jmin(64,len*2),juce::dontSendNotification);syncVisibleSteps();syncStepControls();repaint();};
- addAndMakeVisible(clearSeq);clearSeq.onClick=[this]{p.engine.clearSequence();drummerEnable.setToggleState(false,juce::dontSendNotification);syncVisibleSteps();syncStepControls();repaint();};addAndMakeVisible(stepSoundMode);stepSoundMode.onClick=[this]{editingStepSound=!editingStepSound;stepSoundMode.setButtonText(editingStepSound?"STEP SOUND: ON":"STEP SOUND: OFF");syncStepControls();resized();repaint();};
+ addAndMakeVisible(clearScope);
+ clearScope.setClickingTogglesState(true);
+ clearScope.setTooltip("OFF: only selected instrument; ON: all 12 instruments in pattern.");
+ clearScope.onClick=[this]{
+    clearAll=clearScope.getToggleState();
+    clearScope.setButtonText(clearAll?"CLEAR: ALL":"CLEAR: TRACK");
+ };
+ addAndMakeVisible(clearSeq);
+ clearSeq.onClick=[this]{
+    if(clearAll)p.engine.clearSequence();else p.engine.clearVoice(selected);
+    drummerEnable.setToggleState(false,juce::dontSendNotification);
+    syncVisibleSteps();syncStepControls();repaint();
+ };addAndMakeVisible(stepSoundMode);stepSoundMode.onClick=[this]{editingStepSound=!editingStepSound;stepSoundMode.setButtonText(editingStepSound?"STEP SOUND: ON":"STEP SOUND: OFF");syncStepControls();resized();repaint();};
  for(int i=0;i<4;i++){auto& control=stepSound[(size_t)i];addAndMakeVisible(control);control.setSliderStyle(juce::Slider::LinearHorizontal);control.setTextBoxStyle(juce::Slider::TextBoxRight,false,56,20);control.setRange(0,1,.01);control.onValueChange=[this,i]{auto& st=p.engine.pattern(p.engine.getPattern()).step[(size_t)selected][(size_t)selectedStep];st.sound[(size_t)i]=(float)stepSound[(size_t)i].getValue();st.soundMask|=(uint8_t)(1u<<i);};}
  for(auto*s:{&stepVelocity,&stepProbability,&stepRatchet,&stepMicro}){addAndMakeVisible(*s);s->setSliderStyle(juce::Slider::LinearHorizontal);s->setTextBoxStyle(juce::Slider::TextBoxRight,false,56,20);}addAndMakeVisible(stepNote);
  addAndMakeVisible(stepAccent);addAndMakeVisible(stepFlam);addAndMakeVisible(patternLength);addAndMakeVisible(patternSelect);addAndMakeVisible(changeMode);
@@ -259,7 +284,7 @@ void JerzyDrumMachineAudioProcessorEditor::resized(){
  for(int b=0;b<4;b++){banks[b].setVisible(isSeq);banks[b].setBounds(205+b*105,126,96,30);}
  int stepW=juce::jmax(38,(w-250)/16);int stepSize=juce::jmin(60,stepW-5);for(int s=0;s<16;s++){steps[s].setVisible(isSeq);steps[s].setBounds(202+s*stepW,172,stepSize,stepSize);}
  const int paramY=juce::jmax(395,h-283),grooveY=h-146;
- seqDivision.setVisible(isSeq);seqDivision.setTooltip("Subdivision for selected instrument only; other tracks keep their own timing.");seqDivision.setBounds(665,126,170,30);joinBanks.setVisible(isSeq);joinBanks.setBounds(947,126,120,30);stepVelocity.setVisible(isSeq&&!editingStepSound);stepProbability.setVisible(isSeq&&!editingStepSound);stepRatchet.setVisible(isSeq&&!editingStepSound);stepMicro.setVisible(isSeq&&!editingStepSound);stepAccent.setVisible(isSeq&&!editingStepSound);stepFlam.setVisible(isSeq&&!editingStepSound);for(auto& control:stepSound)control.setVisible(isSeq&&editingStepSound);stepSoundMode.setVisible(isSeq);stepSoundMode.setBounds(585,paramY+72,100,26);clearSeq.setVisible(isSeq);clearSeq.setBounds(842,126,100,30);patternLength.setVisible(isSeq);patternSelect.setVisible(isSeq);changeMode.setVisible(isSeq);stepNote.setVisible(isSeq&&selected==11);
+ seqDivision.setVisible(isSeq);seqDivision.setTooltip("Subdivision for selected instrument only; other tracks keep their own timing.");seqDivision.setBounds(665,126,170,30);joinBanks.setVisible(isSeq);joinBanks.setBounds(947,126,120,30);stepVelocity.setVisible(isSeq&&!editingStepSound);stepProbability.setVisible(isSeq&&!editingStepSound);stepRatchet.setVisible(isSeq&&!editingStepSound);stepMicro.setVisible(isSeq&&!editingStepSound);stepAccent.setVisible(isSeq&&!editingStepSound);stepFlam.setVisible(isSeq&&!editingStepSound);for(auto& control:stepSound)control.setVisible(isSeq&&editingStepSound);stepSoundMode.setVisible(isSeq);stepSoundMode.setBounds(585,paramY+72,100,26);clearSeq.setVisible(isSeq);clearSeq.setBounds(830,160,124,28);clearScope.setVisible(isSeq);clearScope.setBounds(956,160,135,28);patternLength.setVisible(isSeq);patternSelect.setVisible(isSeq);changeMode.setVisible(isSeq);stepNote.setVisible(isSeq&&selected==11);
  stepVelocity.setBounds(300,paramY,270,22);stepProbability.setBounds(300,paramY+26,270,22);stepRatchet.setBounds(300,paramY+52,270,22);stepMicro.setBounds(300,paramY+78,270,22);for(int i=0;i<4;i++)stepSound[(size_t)i].setBounds(300,paramY+i*26,270,22);stepAccent.setBounds(585,paramY,100,26);stepFlam.setBounds(585,paramY+34,100,26);for(auto*b:{&copyTrack,&pasteTrack,&duplicateTrack})b->setVisible(isSeq);copyTrack.setBounds(205,305,112,28);pasteTrack.setBounds(325,305,112,28);duplicateTrack.setBounds(445,305,120,28);trackLength.setVisible(isSeq);trackLength.setBounds(805,paramY,210,22);patternLength.setBounds(805,paramY+26,210,22);patternSelect.setBounds(805,paramY+52,235,26);changeMode.setBounds(805,paramY+78,235,26);stepNote.setBounds(805,paramY+105,148,26);
  generate.setVisible(isSeq);mutate.setVisible(isSeq);fill.setVisible(isSeq);generate.setBounds(w-356,grooveY+8,108,27);mutate.setBounds(w-240,grooveY+8,100,27);fill.setBounds(w-132,grooveY+8,88,27);
  int gw=(w-64)/8;for(int i=0;i<8;i++){genParam[i].setVisible(isSeq);genParam[i].setBounds(28+i*gw,grooveY+34,gw,70);}
