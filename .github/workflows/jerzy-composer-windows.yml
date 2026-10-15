@@ -68,7 +68,7 @@ jobs:
           Copy-Item -Path "dist/EXE/*" -Destination "dist/Full/Program/" -Recurse
           Copy-Item -Path "dist/Composer/*" -Destination "dist/Full/VST3/" -Recurse
           @(
-            "JERZY COMPOSER 0.4 - WINDOWS x64"
+            "JERZY COMPOSER 0.5 - WINDOWS x64"
             ""
             "1. Uruchom Program/JerzyFLBridge.exe i zainstaluj skrypty FL Studio."
             "2. Skopiuj caly folder VST3/Jerzy Composer.vst3 do C:\Program Files\Common Files\VST3."
