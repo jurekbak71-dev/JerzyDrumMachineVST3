@@ -113,9 +113,11 @@ public:
   midi.setTicksPerQuarterNote(960);
   midi.addTrack(sequence);
   juce::TemporaryFile tmp(target);
-  juce::FileOutputStream out(tmp.getFile());
-  if(!out.openedOk()||!midi.writeTo(out))return false;
-  out.flush();
+  {
+   juce::FileOutputStream out(tmp.getFile());
+   if(!out.openedOk()||!midi.writeTo(out))return false;
+   out.flush();
+  }
   return tmp.overwriteTargetFileWithTemporary();
  }
  bool loadSample(int slot,const juce::File& file){if(slot<0||slot>=3)return false;juce::AudioFormatManager fm;fm.registerBasicFormats();std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(file));if(!r)return false;auto&ss=samples[(size_t)slot];ss.audio.setSize(1,(int)r->lengthInSamples);r->read(&ss.audio,0,(int)r->lengthInSamples,0,true,false);ss.sourceRate=r->sampleRate;ss.loaded=true;ss.active=false;ss.sourcePath=file.getFullPathName();sampleNames[(size_t)slot]=file.getFileName();return true;}
