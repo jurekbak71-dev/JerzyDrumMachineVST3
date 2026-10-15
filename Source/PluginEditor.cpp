@@ -82,8 +82,34 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
 
  for(int i=0;i<4;i++){addAndMakeVisible(soundParam[i]);soundParam[i].setRange(0,1,.01);soundParam[i].setValue(p.engine.getVoiceParam(selected,i));soundParam[i].setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);soundParam[i].setTextBoxStyle(juce::Slider::TextBoxBelow,false,56,18);soundParam[i].onValueChange=[this,i]{p.engine.setVoiceParam(selected,i,(float)soundParam[i].getValue());};}attachSoundParameters();
 
- saveKit.onClick=[this]{kitChooser=std::make_unique<juce::FileChooser>("Save Jerzy Drum Kit",juce::File{},"*.jdmkit");kitChooser->launchAsync(juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles,[this](const juce::FileChooser&fc){auto file=fc.getResult();if(file.getFileExtension().isEmpty())file=file.withFileExtension(".jdmkit");if(auto xml=p.engine.saveState().createXml())xml->writeTo(file);});};
- loadKit.onClick=[this]{kitChooser=std::make_unique<juce::FileChooser>("Load Jerzy Drum Kit",juce::File{},"*.jdmkit");kitChooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,[this](const juce::FileChooser&fc){auto file=fc.getResult();if(auto xml=juce::XmlDocument::parse(file)){p.engine.loadState(juce::ValueTree::fromXml(*xml));p.syncParametersFromEngine();attachSoundParameters();syncVisibleSteps();syncStepControls();repaint();}});};
+ saveKit.onClick=[this]{
+  kitChooser=std::make_unique<juce::FileChooser>("Save Kit or MIDI pattern",juce::File{},"*.jdmkit;*.mid");
+  kitChooser->launchAsync(juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles,
+   [this](const juce::FileChooser&fc){
+    auto file=fc.getResult();
+    if(file.getFullPathName().isEmpty())return;
+    if(file.getFileExtension().isEmpty())file=file.withFileExtension(".jdmkit");
+    if(file.hasFileExtension(".mid"))p.engine.exportMidiPattern(file,p.engine.getPattern());
+    else if(auto xml=p.engine.saveState().createXml())xml->writeTo(file);
+   });
+ };
+ loadKit.onClick=[this]{
+  kitChooser=std::make_unique<juce::FileChooser>("Load Kit or MIDI pattern",juce::File{},"*.jdmkit;*.mid");
+  kitChooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,
+   [this](const juce::FileChooser&fc){
+    auto file=fc.getResult();
+    if(!file.existsAsFile())return;
+    if(file.hasFileExtension(".mid")){
+     if(p.engine.importMidiPattern(file,p.engine.getPattern())){
+      syncVisibleSteps();syncStepControls();repaint();
+     }
+    }else if(auto xml=juce::XmlDocument::parse(file)){
+     p.engine.loadState(juce::ValueTree::fromXml(*xml));
+     p.syncParametersFromEngine();attachSoundParameters();
+     syncVisibleSteps();syncStepControls();repaint();
+    }
+   });
+ };
 
  syncVisibleSteps();syncStepControls();startTimerHz(20);
 }
