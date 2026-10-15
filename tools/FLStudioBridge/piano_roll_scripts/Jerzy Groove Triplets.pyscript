@@ -1,0 +1,23 @@
+"""FL Studio Piano Roll: transform selected/current notes with independent timing controls."""
+import flpianoroll as flp
+
+def createDialog():
+    form=flp.ScriptDialog('Jerzy Groove & Triplets','Groove, 16ths/triplets, accent, velocity')
+    form.addInputCombo('Grid',['16ths','16th triplets','8ths'],0)
+    form.addInputKnob('Swing',0.15,0.0,0.49)
+    form.addInputKnobInt('Accent every N steps',4,1,12)
+    form.addInputKnob('Accent strength',0.20,0.0,0.50)
+    form.addInputCheckbox('Quantize starts',True)
+    return form
+
+def apply(form):
+    ppq=flp.score.PPQ
+    unit=[ppq/4.0,ppq/6.0,ppq/2.0][form.getInputValue('Grid')]
+    swing=form.getInputValue('Swing');accent=int(form.getInputValue('Accent every N steps'))
+    strength=form.getInputValue('Accent strength')
+    quant=form.getInputValue('Quantize starts')
+    for i in range(flp.score.noteCount):
+        n=flp.score.getNote(i)
+        grid_idx=round(n.time/unit)
+        if quant:n.time=max(0,round(grid_idx*unit+(grid_idx%2)*swing*unit))
+        if grid_idx%accent==0:n.velocity=min(1.0,n.velocity+strength)
