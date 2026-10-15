@@ -9,4 +9,9 @@
     <ApplicationTitle>Jerzy FL Studio Bridge</ApplicationTitle>
     <Version>0.2.0</Version>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="piano_roll_scripts\*.pyscript">
+      <LogicalName>Scripts.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 </Project>
