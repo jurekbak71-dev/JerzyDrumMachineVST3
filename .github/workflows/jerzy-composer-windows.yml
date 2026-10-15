@@ -19,6 +19,16 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Install Python for Piano Roll tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check native Piano Roll scripts
+        shell: pwsh
+        run: |
+          Get-ChildItem "tools/FLStudioBridge/piano_roll_scripts/*.pyscript" | ForEach-Object { python -m py_compile $_.FullName }
+          python -m unittest discover -s tools/FLStudioBridge/tests -p "test_*.py" -v
+          if ($LASTEXITCODE -ne 0) { throw "Composer musical smoke tests failed" }
       - name: Build portable Windows EXE
         shell: pwsh
         run: |
