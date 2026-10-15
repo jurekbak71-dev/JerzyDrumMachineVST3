@@ -80,12 +80,17 @@ int main()
   std::unique_ptr<juce::AudioProcessorEditor> editor(processor->createEditor());auto visibleChildren=[&]{int count=0;for(int i=0;i<editor->getNumChildComponents();++i)if(editor->getChildComponent(i)->isVisible())++count;return count;};if(visibleChildren()<6||visibleChildren()>140){log("FAIL: editor did not isolate the initial page controls");return 15;}
   // Regression for actual GUI handlers: COPY 1-16, select BANK 17-32, PASTE 16.
   {
-    auto& pat=processor->engine.pattern(0);
+    // Dedicated fixture: bank editing changes pattern/track lengths and must
+    // not contaminate the separate JOIN BANKS or SONG regression tests.
+    auto bankProcessor=std::make_unique<JerzyDrumMachineAudioProcessor>();
+    bankProcessor->prepareToPlay(48000.0,512);
+    std::unique_ptr<juce::AudioProcessorEditor> bankEditor(bankProcessor->createEditor());
+    auto& pat=bankProcessor->engine.pattern(0);
     pat.step[0][0].on=true;pat.step[0][0].velocity=.71f;
     pat.step[1][0].on=true;
     auto clickText=[&](const juce::String& label)->bool {
-      for(int i=0;i<editor->getNumChildComponents();++i)
-        if(auto* b=dynamic_cast<juce::Button*>(editor->getChildComponent(i));
+      for(int i=0;i<bankEditor->getNumChildComponents();++i)
+        if(auto* b=dynamic_cast<juce::Button*>(bankEditor->getChildComponent(i));
             b&&b->getButtonText()==label){
           b->triggerClick();
           // JUCE delivers Button::triggerClick via the MessageManager queue.
