@@ -41,6 +41,12 @@ JerzyComposerProcessor::makeLayout() {
                                       "Funk","Ambient","House","Breakbeat","Lo-fi hip-hop"},0);
     choices("division","Podział rytmiczny",
             {"1/8","1/16","1/16T - triole","1/32","1/8T - triole"},1);
+    choices("noteLength","Wartość nuty",
+            {"Automatyczna / muzyczna","1/32","1/16T","1/16","1/8T",
+             "1/8","1/4","1/2","1 takt","2 takty"},0);
+    choices("rhythm","Model rytmu",
+            {"Styl muzyczny","Half-time","Synkopowany","Triolowy",
+             "Euklidesowy 5/16","Broken / bounce"},0);
     choices("color","Rodzaj akordu",
             {"Trójdźwięk","Septymowy","Sus2 / Sus4","Add9"},0);
     choices("voicing","Rozłożenie akordów",
@@ -51,7 +57,12 @@ JerzyComposerProcessor::makeLayout() {
     integer("swing","Swing (%)",0,45,15);
     integer("human","Naturalność (%)",0,25,6);
     integer("variation","Wariacje frazy (%)",0,100,35);
-    integer("gate","Długość nut (%)",25,115,85);
+    integer("gate","Gate / artykulacja (%)",10,200,85);
+    integer("lengthVariation","Zmienność długości (%)",0,100,65);
+    integer("syncopation","Synkopy / przesunięcia (%)",0,100,30);
+    integer("dynamics","Dynamika velocity (%)",0,100,70);
+    integer("accents","Akcenty metryczne (%)",0,100,65);
+    integer("ghosts","Ghost notes (%)",0,100,22);
     integer("seed","Wariant / seed",0,1000000,71);
     integer("channel","Kanał MIDI",1,16,1);
     return {p.begin(),p.end()};
@@ -62,11 +73,17 @@ jerzy_composer::Settings JerzyComposerProcessor::settings(double barLength) cons
     s.mode=(int)get("mode"); s.tonic=(int)get("tonic"); s.octave=(int)get("octave");
     s.scale=(int)get("scale"); s.progression=(int)get("progression");
     s.style=(int)get("style"); s.division=(int)get("division");
+    s.noteLength=(int)get("noteLength"); s.rhythm=(int)get("rhythm");
     s.color=(int)get("color"); s.voicing=(int)get("voicing");
     s.direction=(int)get("direction"); s.arpOctaves=(int)get("octaves");
     s.density=get("density")/100.f; s.swing=get("swing")/100.f;
     s.human=get("human")/100.f; s.variation=get("variation")/100.f;
     s.gate=get("gate")/100.f; s.seed=(int)get("seed");
+    s.lengthVariation=get("lengthVariation")/100.f;
+    s.syncopation=get("syncopation")/100.f;
+    s.dynamics=get("dynamics")/100.f;
+    s.accents=get("accents")/100.f;
+    s.ghosts=get("ghosts")/100.f;
     s.barLength=barLength;
     return s;
 }
