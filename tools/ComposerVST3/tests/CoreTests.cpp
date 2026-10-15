@@ -155,6 +155,28 @@ int main(){
         if(!same(a,b))newGhost=true;
     }
     check(newGhost,"ghost notes have a measurable MIDI effect");
+    // Model-specific drums must change kick/snare positions, not just hi-hats.
+    s=Settings{};s.mode=0;s.density=1.f;s.ghosts=0.f;
+    s.variation=0.f;s.human=0.f;s.swing=0.f;s.syncopation=0.f;
+    s.rhythm=1;
+    const auto halfTime=generateBar(s,0);
+    int halfSnare=0;
+    for(int i=0;i<halfTime.count;++i)
+        if(halfTime.notes[static_cast<std::size_t>(i)].pitch==37) {
+            check(std::abs(halfTime.notes[static_cast<std::size_t>(i)].position-2.)<.01,
+                  "half-time places snare on beat three");
+            ++halfSnare;
+        }
+    check(halfSnare==1,"half-time generates exactly one main snare");
+    s.rhythm=4;
+    const auto euclidean=generateBar(s,0);
+    std::set<int> kickSteps;
+    for(int i=0;i<euclidean.count;++i)
+        if(euclidean.notes[static_cast<std::size_t>(i)].pitch==36)
+            kickSteps.insert(static_cast<int>(
+                std::lround(euclidean.notes[static_cast<std::size_t>(i)].position*4)));
+    check(kickSteps==std::set<int>({0,4,7,10,13}),
+          "Euclidean 5/16 generates five actual kick onsets");
     // Keep deterministic while varying rhythm/duration/velocity.
     s=Settings{};s.noteLength=9;s.lengthVariation=1.f;s.gate=2.f;
     s.syncopation=1.f;s.dynamics=1.f;s.accents=1.f;s.rhythm=5;
