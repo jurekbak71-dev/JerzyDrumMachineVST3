@@ -20,3 +20,13 @@ Każdy push uruchamia Windows build i publikuje ZIP VST3 jako artifact GitHub Ac
 
 
 Build status: CI validation enabled.
+
+## FL Studio recovery v0.2.0 (October 2026)
+This repair branch is based on the complete `feature/sequencer-preview-layout` implementation,
+**not** the reduced main/early MIDI branch. It preserves independent per-track triplets and
+lengths, copy/paste/duplicate track, drummer, song chain, sound edit (PUNCH, DETUNE,
+BRIGHTNESS), per-step automation, synth editor, independent stems, master and FX.
+Use this branch as the only forward base. Do not overwrite it with the older main-branch
+JerzyDrumMachine-VST3 ZIP.
+The plug-in identity remains `com.jerzyaudio.drummachine` / `JDrm`.
+Windows CI + physical FL Studio acceptance remain mandatory before replacing a stable version.
