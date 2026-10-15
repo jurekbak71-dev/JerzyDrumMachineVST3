@@ -66,7 +66,7 @@ JerzyComposerEditor::JerzyComposerEditor(JerzyComposerProcessor& p)
     addAndMakeVisible(instructions);
     setResizable(true,true);
     setResizeLimits(790,645,1280,1000);
-    setSize(980,735);
+    setSize(900,650);
 }
 
 void JerzyComposerEditor::addChoice(const char* param,const juce::String& title,
