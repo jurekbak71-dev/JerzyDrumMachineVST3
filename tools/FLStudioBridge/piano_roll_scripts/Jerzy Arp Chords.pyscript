@@ -1,0 +1,29 @@
+"""FL Studio Piano Roll: split each chord starting at same tick into repeating arpeggio."""
+import flpianoroll as flp
+
+def createDialog():
+    f=flp.ScriptDialog('Jerzy Chord Arpeggiator','Replace chord stacks with rhythmic notes')
+    f.addInputCombo('Step',['1/8','1/16','1/16 triplet'],1)
+    f.addInputCombo('Direction',['Up','Down','Up-Down'],0)
+    f.addInputKnobInt('Octaves',1,1,3)
+    return f
+
+def apply(f):
+    ppq=flp.score.PPQ;step=[ppq/2,ppq/4,ppq/6][f.getInputValue('Step')]
+    groups={}
+    for i in range(flp.score.noteCount):
+        n=flp.score.getNote(i)
+        groups.setdefault(n.time,[]).append((n.number,n.length,n.velocity))
+    flp.score.clearNotes(True)
+    for t,items in sorted(groups.items()):
+        pitches=sorted(set(p+12*o for p,_,_ in items for o in range(f.getInputValue('Octaves'))))
+        direction=f.getInputValue('Direction')
+        if direction==1:pitches.reverse()
+        if direction==2 and len(pitches)>2:pitches+=pitches[-2:0:-1]
+        end=t+max(length for _,length,_ in items)
+        k=0
+        while t+round(k*step)<end:
+            start=t+round(k*step);stop=min(end,t+round((k+1)*step))
+            n=flp.Note();n.number=pitches[k%len(pitches)];n.time=start;n.length=max(1,stop-start)
+            n.velocity=max(v for _,_,v in items)
+            flp.score.addNote(n);k+=1
