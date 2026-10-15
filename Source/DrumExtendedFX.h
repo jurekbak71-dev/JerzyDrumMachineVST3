@@ -17,6 +17,7 @@ public:
         tapeL.assign((size_t)std::ceil(rate*0.090)+8,0.f);
         tapeR.assign(tapeL.size(),0.f);
         reset();
+        configureTape(.42f,.75f);
     }
     void reset() {
         std::fill(chorusL.begin(),chorusL.end(),0.f);
@@ -27,6 +28,16 @@ public:
         flutterValue=0;noiseState=0x7D2A4E91u;dropoutRemaining=0;
         tapeLowL=tapeLowR=0;
     }
+    // All expensive tape filter coefficient work occurs ONCE per host block,
+    // not in the per-sample process callback.
+    void configureTape(float age,float filter) noexcept {
+        const double cutoff=juce::jmap((double)juce::jlimit(0.f,1.f,filter),1300.0,18500.0)*
+            (1.0-.65*juce::jlimit(0.f,1.f,age));
+        tapeFilterCoefficient=juce::jlimit(.0001f,.98f,
+             (float)(1.0-std::exp(-juce::MathConstants<double>::twoPi*cutoff/rate)));
+        const float saturation=1.f+4.5f*juce::jlimit(0.f,1.f,age);
+        tapeGain=1.f/juce::jmax(.1f,std::tanh(saturation));
+    }
     // chorus: depth 0..1 (0.25 to 7ms), spread 0..1 (stereo offset),
     // width 0..1 (opposed channel crossfeed). Returns WET ONLY.
     std::array<float,2> chorus(float inL,float inR,float depth,float width) noexcept {
@@ -35,7 +46,8 @@ public:
         const float phase=chorusPhase;
         chorusPhase+=1.0f/(float)(rate*1.6);if(chorusPhase>=1.f)chorusPhase-=1.f;
         const float triangle=1.f-4.f*std::abs(phase-.5f);
-        const float shifted=1.f-4.f*std::abs(std::fmod(phase+.25f,1.f)-.5f);
+        const float shift=phase+.25f<1.f?phase+.25f:phase-.75f;
+        const float shifted=1.f-4.f*std::abs(shift-.5f);
         const double centre=.010*rate,excursion=(.00025+.00675*depth)*rate;
         const float a=read(chorusL,chorusPos,centre+excursion*triangle);
         const float b=read(chorusR,chorusPos,centre+excursion*shifted);
@@ -51,7 +63,7 @@ public:
         if(tapeL.empty())return {0.f,0.f};
         age=juce::jlimit(0.f,1.f,age);
         wear=juce::jlimit(0.f,1.f,wear);
-        filter=juce::jlimit(0.f,1.f,filter);
+        (void)filter; // filter coefficient cached via configureTape()
         const float speed=1.2f+.55f*age;
         wowPhase+=speed/(float)rate;if(wowPhase>=1.f)wowPhase-=1.f;
         flutterPhase+=(9.f+12.f*age)/(float)rate;if(flutterPhase>=1.f)flutterPhase-=1.f;
@@ -65,17 +77,14 @@ public:
                                    .0015*wear*flutterValue;
         const double delay=juce::jlimit(1.0,(double)tapeL.size()-3.0,delaySeconds*rate);
         const float sat=1.f+4.5f*age;
-        const float recL=std::tanh(finite(inL)*sat)/std::tanh(sat);
-        const float recR=std::tanh(finite(inR)*sat)/std::tanh(sat);
+        const float recL=std::tanh(finite(inL)*sat)*tapeGain;
+        const float recR=std::tanh(finite(inR)*sat)*tapeGain;
         tapeL[tapePos]=recL;tapeR[tapePos]=recR;
         const float rawL=read(tapeL,tapePos,delay);
         const float rawR=read(tapeR,tapePos,delay);
         tapePos=(tapePos+1)%tapeL.size();
-        const double cutoff=juce::jmap((double)filter,1300.0,18500.0)*
-            (1.0-.65*age);
-        const float coeff=juce::jlimit(.0001f,.98f,
-           (float)(1.0-std::exp(-juce::MathConstants<double>::twoPi*cutoff/rate)));
-        tapeLowL+=coeff*(rawL-tapeLowL);tapeLowR+=coeff*(rawR-tapeLowR);
+        tapeLowL+=tapeFilterCoefficient*(rawL-tapeLowL);
+        tapeLowR+=tapeFilterCoefficient*(rawR-tapeLowR);
         if(dropoutRemaining>0)--dropoutRemaining;
         else if(wear>.02f && rand01()<(.5e-5f*wear*wear)){
             dropoutRemaining=(int)(rate*(.010+.040*rand01()));
@@ -110,4 +119,5 @@ private:
     float flutterTarget=0,flutterValue=0,tapeLowL=0,tapeLowR=0;
     int flutterCounter=0,dropoutRemaining=0;
     uint32_t noiseState=0x7D2A4E91u;
+    float tapeFilterCoefficient=.1f,tapeGain=1.f;
 };
