@@ -29,6 +29,10 @@ JerzyComposerEditor::JerzyComposerEditor(JerzyComposerProcessor& p)
                                      "Ambient","House","Breakbeat","Lo-fi hip-hop"});
     addChoice("division","PODZIAŁ RYTMICZNY",{"1/8","1/16","1/16T - triole",
                                             "1/32","1/8T - triole"});
+    addChoice("noteLength","WARTOŚĆ NUTY",{"Auto – muzyczne","1/32","1/16T",
+                    "1/16","1/8T","1/8","1/4","1/2","1 takt","2 takty"});
+    addChoice("rhythm","MODEL RYTMU",{"Stylowy","Half-time","Synkopowany",
+                     "Triole","Euklidesowy 5/16","Broken / bounce"});
     addChoice("color","RODZAJ AKORDU",{"Trójdźwięk","Septymowy","Sus2 / Sus4","Add9"});
     addChoice("voicing","UKŁAD HARMONII",{"Blisko","Szeroko","Płynne przejścia"});
     addChoice("direction","RUCH ARPEGGIO",{"W górę","W dół","Góra / dół"});
@@ -36,7 +40,12 @@ JerzyComposerEditor::JerzyComposerEditor(JerzyComposerProcessor& p)
     addControl("swing","SWING / KOŁYSANIE");
     addControl("human","NATURALNOŚĆ");
     addControl("variation","WARIACJE FRAZY");
-    addControl("gate","DŁUGOŚĆ NUT");
+    addControl("gate","GATE / ARTYKULACJA");
+    addControl("lengthVariation","ZMIENNOŚĆ DŁUGOŚCI");
+    addControl("syncopation","SYNKOPACJA");
+    addControl("dynamics","DYNAMIKA");
+    addControl("accents","SIŁA AKCENTÓW");
+    addControl("ghosts","GHOST NOTES");
     addControl("octaves","OKTAWY ARP");
     addControl("seed","NOWY WARIANT / SEED");
     addControl("channel","KANAŁ MIDI");
@@ -65,8 +74,8 @@ JerzyComposerEditor::JerzyComposerEditor(JerzyComposerProcessor& p)
     instructions.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(instructions);
     setResizable(true,true);
-    setResizeLimits(790,645,1280,1000);
-    setSize(900,650);
+    setResizeLimits(820,680,1380,1080);
+    setSize(960,720);
 }
 
 void JerzyComposerEditor::addChoice(const char* param,const juce::String& title,
@@ -89,6 +98,7 @@ void JerzyComposerEditor::addControl(const char* param,const juce::String& title
     auto c=std::make_unique<Control>();
     c->label.setText(title,juce::dontSendNotification);
     labelStyle(c->label,true);
+    c->label.setFont(juce::Font(juce::FontOptions(11.5f)));
     c->slider.setSliderStyle(juce::Slider::LinearHorizontal);
     c->slider.setTextBoxStyle(juce::Slider::TextBoxRight,false,55,22);
     c->slider.setColour(juce::Slider::trackColourId,accent);
@@ -115,7 +125,7 @@ void JerzyComposerEditor::paint(juce::Graphics& g) {
     g.drawText("JERZY COMPOSER",38,18,getWidth()-370,40,juce::Justification::centredLeft);
     g.setColour(muted);
     g.setFont(juce::Font(juce::FontOptions(13.f)));
-    g.drawText("MIDI COMPOSER   •   v0.4 DEVELOPMENT   •   WINDOWS VST3",
+    g.drawText("MIDI COMPOSER   •   v0.5 DEVELOPMENT   •   WINDOWS VST3",
                40,55,getWidth()-390,24,juce::Justification::centredLeft);
     g.setColour(juce::Colour(0xff425765));
     g.drawHorizontalLine(92,20.f,float(getWidth()-20));
@@ -125,17 +135,17 @@ void JerzyComposerEditor::paint(juce::Graphics& g) {
     g.drawText("RYTM I ARANŻACJA",getWidth()/2+10,100,getWidth()/2-34,19,
                juce::Justification::centredLeft);
     const int controlTop=125;
-    const int bottomStart=getHeight()-260;
+    const int bottomStart=getHeight()-271;
     g.setColour(juce::Colour(0xff213543));
     g.fillRoundedRectangle(18.f,float(controlTop-3),float(getWidth()/2-29),
                            float(bottomStart-controlTop-8),10.f);
     g.fillRoundedRectangle(float(getWidth()/2+5),float(controlTop-3),
                            float(getWidth()/2-23),float(bottomStart-controlTop-8),10.f);
     g.setColour(muted);
-    g.drawText("EKSPRESJA I PARAMETRY MIDI",24,bottomStart-27,getWidth()-48,22,
+    g.drawText("RYTM • DŁUGOŚĆ NUT • DYNAMIKA",24,bottomStart-27,getWidth()-48,22,
                juce::Justification::centredLeft);
     g.setColour(juce::Colour(0xff213543));
-    g.fillRoundedRectangle(18.f,float(bottomStart),float(getWidth()-36),176.f,10.f);
+    g.fillRoundedRectangle(18.f,float(bottomStart),float(getWidth()-36),229.f,10.f);
     g.setColour(juce::Colour(0xff425765));
     g.drawHorizontalLine(getHeight()-58,20.f,float(getWidth()-20));
 }
@@ -148,25 +158,25 @@ void JerzyComposerEditor::resized() {
     const int colWidth=(w-54-colGap)/2;
     const int x0=27,x1=x0+colWidth+colGap;
     const int start=131;
-    const int lower=h-260;
-    const int step=juce::jlimit(46,62,(lower-start-15)/5);
+    const int lower=h-271;
+    const int step=juce::jlimit(44,62,(lower-start-10)/6);
     for(int i=0;i<static_cast<int>(choices.size());++i) {
         auto& c=*choices[static_cast<std::size_t>(i)];
-        const int column=i<5?0:1;
-        const int row=i<5?i:i-5;
+        const int column=i<6?0:1;
+        const int row=i<6?i:i-6;
         const int x=column?x1:x0;
         const int y=start+row*step;
         c.label.setBounds(x,y,colWidth,18);
         c.control.setBounds(x,y+18,colWidth,juce::jmin(32,step-21));
     }
-    const int bottom=h-260;
+    const int bottom=h-271;
     const int knobWidth=(w-62)/4;
     for(int i=0;i<static_cast<int>(controls.size());++i) {
         auto& c=*controls[static_cast<std::size_t>(i)];
         const int x=27+(i%4)*knobWidth;
-        const int y=bottom+14+(i/4)*79;
-        c.label.setBounds(x,y,knobWidth-8,22);
-        c.slider.setBounds(x,y+24,knobWidth-10,33);
+        const int y=bottom+8+(i/4)*53;
+        c.label.setBounds(x,y,knobWidth-8,18);
+        c.slider.setBounds(x,y+19,knobWidth-10,30);
     }
-    instructions.setBounds(24,h-51,w-48,36);
+    instructions.setBounds(24,h-43,w-48,27);
 }
