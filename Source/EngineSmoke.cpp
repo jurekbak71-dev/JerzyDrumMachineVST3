@@ -29,6 +29,19 @@ int main(){
   auto copy=std::make_unique<DrumEngine>();copy->prepare(48000.0);copy->loadState(state);
   log("SMOKE: state restored");
   if(std::abs(copy->gain[0]-0.42f)>.001f||std::abs(copy->panorama[0]+0.25f)>.001f){log("FAIL: state restore mismatch");return 3;}
+  // FL Studio interoperability regression: persistent pattern -> SMF -> pattern.
+  auto midiPath=juce::File::getSpecialLocation(juce::File::tempDirectory)
+       .getNonexistentChildFile("jerzy_drum_bridge_",".mid",false);
+  e->pattern(0).step[0][0].on=true;
+  e->pattern(0).step[0][0].velocity=0.95f;
+  if(!e->exportMidiPattern(midiPath,0)){log("FAIL: MIDI export");return 5;}
+  auto imported=std::make_unique<DrumEngine>();imported->prepare(48000.0);
+  const bool importedOk=imported->importMidiPattern(midiPath,0);
+  midiPath.deleteFile();
+  if(!importedOk||!imported->pattern(0).step[0][0].on){
+    log("FAIL: MIDI pattern roundtrip");return 6;
+  }
+  log("PASS: MIDI 12-voice pattern export/import smoke test");
   log("PASS: audio and state smoke test");
   return 0;
  }catch(const std::exception&e){log(std::string("FAIL exception: ")+e.what());return 10;}
