@@ -240,10 +240,11 @@ inline void generateDrums(const Settings& s, int bar, Bar& result) noexcept {
             }
         }
     }
-    const double step = stepLength(s.division);
+    const double step = s.rhythm==3 ? s.barLength/12. : stepLength(s.division);
     const int hats = std::clamp(static_cast<int>(std::round(s.barLength/step)),1,96);
     for (int i=0;i<hats;++i) {
         if (!chance(s,bar,400+i,.22f+.78f*s.density))continue;
+        if(s.rhythm!=0 && !rhythmHit(s,bar,i,hats,i==0))continue;
         const double at = humanTime(s,bar,600+i,i*s.barLength/hats,step);
         result.add(39,at,step*.42,velocity(s,bar,800+i,i%2==0?88:63));
     }
@@ -273,6 +274,39 @@ inline void generateBass(const Settings& s, int bar, Bar& result) noexcept {
     const int st=std::clamp(s.style,0,7);
     const int degree=chordDegree(s.progression,bar);
     const double unit=s.barLength/16.;
+    if(s.rhythm!=0) {
+        // Each rhythm model generates its OWN pulse train, not merely a mask
+        // over a pre-existing rock riff. Quarters are expressed in PPQ beats.
+        const int model=std::clamp(s.rhythm,1,5);
+        const int pattern[][8] = {
+            {0,8,-1,-1,-1,-1,-1,-1},   // half-time
+            {0,3,7,10,14,-1,-1,-1},  // syncopated
+            {0,2,4,6,8,10,-1,-1},    // triplet 12-step
+            {0,4,7,10,13,-1,-1,-1},  // Euclidean 5/16
+            {0,2,5,8,11,13,-1,-1}   // broken / bounce
+        };
+        const int total=(model==3 ? 12 : 16);
+        int count=0;
+        for(int k=0;k<8;++k) {
+            const int index=pattern[model-1][k];
+            if(index<0)break;
+            if(k>0 && !chance(s,bar,2800+k,
+                    std::clamp(.38f+.62f*s.density,0.f,1.f)))continue;
+            const double pos=index*s.barLength/total;
+            const double pulse=s.barLength/total;
+            const double t=humanTime(s,bar,2900+k,
+                syncopatedPosition(s,bar,2900+k,pos,pulse),pulse);
+            const int noteDegree=degree + ((k%4==2)?4:((k%4==3)?2:0));
+            // Natural long first note, shorter syncopated pickups.
+            const double duration=(k==0 ? s.barLength*.36 : pulse*(k%2?1.3:2.1));
+            result.add(degreePitch(midiRoot(s),noteDegree,s.scale),
+                       t,duration,velocity(s,bar,3000+k,k==0?114:((k%2)?76:96)));
+            ++count;
+        }
+        if(count==0)
+            result.add(degreePitch(midiRoot(s),degree,s.scale),0.,unit*3.,114);
+        return;
+    }
     for(int j=0;j<7;++j) {
         const auto hit=groove[st][j];
         if(hit.sixteenth<0)break;
@@ -340,7 +374,7 @@ inline void generateArp(const Settings& s, int bar, Bar& result,
             }
     }
     if(size<1)return;
-    const double unit=stepLength(s.division);
+    const double unit=s.rhythm==3 ? s.barLength/12. : stepLength(s.division);
     const int steps=std::clamp(static_cast<int>(std::ceil(s.barLength/unit)),1,128);
     for(int i=0;i<steps;++i) {
         if(i && !(s.rhythm==0
