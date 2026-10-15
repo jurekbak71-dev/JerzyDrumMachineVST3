@@ -2,10 +2,10 @@
 #include "PluginProcessor.h"
 
 namespace {
-constexpr auto textColor=juce::Colour(0xffebf0f5);
-constexpr auto muted=juce::Colour(0xffa7b4c2);
-constexpr auto accent=juce::Colour(0xff5fd6bf);
-constexpr auto dark=juce::Colour(0xff182734);
+const auto textColor=juce::Colour(0xffebf0f5);
+const auto muted=juce::Colour(0xffa7b4c2);
+const auto accent=juce::Colour(0xff5fd6bf);
+const auto dark=juce::Colour(0xff182734);
 void labelStyle(juce::Label& label,bool small=false) {
     label.setColour(juce::Label::textColourId,small?muted:textColor);
     label.setFont(juce::Font(juce::FontOptions(small?12.5f:14.0f)));
