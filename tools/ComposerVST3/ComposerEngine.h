@@ -11,8 +11,11 @@ namespace jerzy_composer {
 struct Settings {
     int mode = 1, tonic = 0, octave = 1, scale = 0, progression = 1, style = 0;
     int division = 1, color = 0, voicing = 2, arpOctaves = 1, direction = 0, seed = 71;
+    int noteLength = 0, rhythm = 0; // 0 = musical auto length / style-based rhythm
     float density = 0.72f, swing = 0.15f, human = 0.06f;
     float variation = 0.35f, gate = 0.85f;
+    float lengthVariation = 0.65f, syncopation = 0.3f;
+    float dynamics = 0.70f, accents = 0.65f, ghosts = 0.22f;
     double barLength = 4.0;
 };
 struct NoteEvent {
@@ -186,7 +189,7 @@ inline void generateBass(const Settings& s, int bar, Bar& result) noexcept {
         const int pitch=degreePitch(midiRoot(s),noteDegree,s.scale);
         const double at=humanTime(s,bar,1200+j,hit.sixteenth*unit,unit);
         double length = s.style==4 ? s.barLength*.48 : unit*3.0;
-        length*=std::clamp(double(s.gate),.25,1.15);
+        // Gate applied exactly once in finishBar, independent of note value.
         result.add(pitch,at,length,velocity(s,bar,1300+j,j==0?117:96));
     }
     if (bar%4!=3 && chance(s,bar,1350,s.variation*.48f)) {
@@ -212,7 +215,7 @@ inline void generateChords(const Settings& s, int bar, Bar& result) noexcept {
                                   s.barLength/16.);
         for(int v=0;v<count;++v)
             result.add(pitches[static_cast<std::size_t>(v)],at,
-                       duration*std::clamp(double(s.gate),.25,1.15),
+                       duration,
                        velocity(s,bar,1500+i*5+v,i==0?99:82));
     }
 }
@@ -251,7 +254,7 @@ inline void generateArp(const Settings& s, int bar, Bar& result,
         if(pos>=s.barLength)break;
         result.add(notes[static_cast<std::size_t>(index)],
                    humanTime(s,bar,1700+i,pos,unit),
-                   unit*std::clamp(double(s.gate),.25,1.15),
+                   unit,
                    velocity(s,bar,1800+i,i%4==0?112:88));
     }
 }
@@ -278,6 +281,95 @@ inline void generateMelody(const Settings& s, int bar, Bar& result) noexcept {
                    velocity(s,bar,2300+i,strong?110:86));
     }
 }
+
+// Musician-readable duration selections in quarter-note units.
+// Auto uses each instrument's designed rhythmic note lengths.
+inline double selectedNoteLength(int index, double barLength) noexcept {
+    switch(index) {
+        case 1:return .125;     // 1/32
+        case 2:return 1./6.;   // 1/16 triplet
+        case 3:return .25;      // 1/16
+        case 4:return 1./3.;   // 1/8 triplet
+        case 5:return .5;       // 1/8
+        case 6:return 1.;       // 1/4
+        case 7:return 2.;       // 1/2
+        case 8:return barLength;// one measure (meter-aware)
+        case 9:return barLength*2.; // two measures
+        default:return 0.;
+    }
+}
+inline double musicalLengthFactor(int motif, int bar, int seed) noexcept {
+    // Stable rhythmic vocabulary: short pickups, sustains, dotted and tied notes.
+    static constexpr double values[16] = {
+        1., .5, 1.5, .75, .5, 1., 2., .5,
+        1.5, 1., .5, 1., .75, 2., .5, 1.};
+    // Phrase-aware, seeded but bounded: avoid unmusical white-noise lengths.
+    const int phase=((motif%16)+16)%16;
+    const int shift=(hash(static_cast<std::uint32_t>(seed + (bar/4)*101)) % 4);
+    return values[(phase + static_cast<int>(shift))%16];
+}
+inline void finishBar(const Settings& s,int bar,Bar& result) noexcept {
+    const float strength=std::clamp(s.dynamics,0.f,1.f);
+    const float accent=std::clamp(s.accents,0.f,1.f);
+    const float lenMix=std::clamp(s.lengthVariation,0.f,1.f);
+    const double gate=std::clamp(double(s.gate),.1,2.);
+    const double explicitLen=selectedNoteLength(s.noteLength,s.barLength);
+    const double q=std::max(.03125,stepLength(s.division));
+    for(int i=0;i<result.count;++i) {
+        auto& n=result.notes[static_cast<std::size_t>(i)];
+        const int pulse=static_cast<int>(std::round(n.position/q));
+        const double variation=musicalLengthFactor(pulse,bar,s.seed);
+        const double base=(s.noteLength==0?n.duration:explicitLen);
+        // At zero variation, fixed length obeys note-value selection precisely.
+        // At max, produces an intentional phrase of varied note values.
+        const double factor=1.0+(variation-1.0)*lenMix;
+        n.duration=std::clamp(base*factor*gate,0.015625,s.barLength*4.);
+        // Drum samples should not hang: preserve short triggering of closed hats.
+        if(s.mode==0 && n.pitch==39)n.duration=std::min(n.duration,q*.92);
+        // Repeated melodic pitches can be retriggered without stuck notes.
+        const double beatPos = std::fmod(n.position,1.0);
+        const bool downbeat=std::abs(beatPos)<.09;
+        const bool offbeat=std::abs(beatPos-.5)<.12;
+        int target=90;
+        if(downbeat)target=101+static_cast<int>(accent*19.);
+        else if(offbeat)target=78+static_cast<int>(accent*4.);
+        else target=72-static_cast<int>(accent*21.);
+        if(s.mode==0) {
+            if(n.pitch==36)target=108+static_cast<int>(accent*14.);
+            else if(n.pitch==37)target=91+static_cast<int>(accent*21.);
+            else if(n.pitch==39)target=downbeat?86:59;
+            else target=63;
+        }
+        if(n.velocity < 70) target=std::min(target,static_cast<int>(n.velocity)+15);
+        const double newVel=90*(1.-strength)+
+                (n.velocity*.55+target*.45)*strength;
+        n.velocity=std::clamp(static_cast<int>(std::lround(newVel)),1,127);
+    }
+}
+// Change timing only on musically meaningful weak positions.
+// Rhythm modes: 0=style, 1=half-time, 2=syncopated,
+// 3=triplet pulse, 4=euclidean 5/16, 5=broken bounce.
+inline bool rhythmHit(const Settings& s,int bar,int step,int total,bool strong) noexcept {
+    if(strong)return true;
+    const auto density=std::clamp(s.density,0.f,1.f);
+    int phase=(step*16)/std::max(1,total);
+    phase=std::clamp(phase,0,15);
+    float bias=.55f;
+    if(s.rhythm==1)bias=(phase==8 || phase==12)?1.f:.28f;
+    if(s.rhythm==2)bias=(phase%4==3||phase%4==2)?1.f:.35f;
+    if(s.rhythm==3)bias=(step%3==0)?1.f:.50f;
+    if(s.rhythm==4)bias=((phase*5)%16<5)?1.f:.12f;
+    if(s.rhythm==5)bias=(phase==3||phase==6||phase==11||phase==14)?1.f:.40f;
+    return chance(s,bar,3900+step,density*(.30f+.70f*bias));
+}
+inline double syncopatedPosition(const Settings& s,int bar,int key,double pos,double unit) noexcept {
+    if(s.syncopation<=0 || pos<unit*.5)return pos;
+    const bool move=chance(s,bar,4100+key,s.syncopation*.58f);
+    if(!move)return pos;
+    // Pull a weak event half a rhythmic step early, without crossing the bar.
+    return std::clamp(pos - unit*.5,0.0,std::max(0.,s.barLength-.001));
+}
+
 inline Bar generateBar(const Settings& s, int bar, const std::array<int,16>& held={},
                        int heldCount=0) noexcept {
     Bar notes;
@@ -288,6 +380,7 @@ inline Bar generateBar(const Settings& s, int bar, const std::array<int,16>& hel
         case 3: generateArp(s,bar,notes,held,std::clamp(heldCount,0,16));break;
         default:generateMelody(s,bar,notes);break;
     }
+    finishBar(s,bar,notes);
     return notes;
 }
 } // namespace jerzy_composer
