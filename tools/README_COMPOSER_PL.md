@@ -28,3 +28,9 @@ This is an isolated integration worktree under `tools/`; it does **not** replace
 CI: `.github/workflows/jerzy-composer-windows.yml` builds both deliverables using .NET 8, JUCE 8.0.4, MSVC and Composer unit tests.
 
 **Not yet validated on real FL Studio host** — leave this PR as draft until host routing and GUI verification pass.
+
+## FL Studio acceptance checklist
+1. Open the Piano Roll script, generate and undo in one project copy.
+2. Load VST3 in FL Studio and confirm host start/stop notes, tempo change and MIDI output routing.
+3. Measure CPU idle and while generating 4/16 voices at buffer 128 and 1024, 44.1/48/96 kHz.
+4. Verify the app's installer EXE under normal user privileges and non-default User Data Folder.
