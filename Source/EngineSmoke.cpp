@@ -8,6 +8,18 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#if JUCE_WINDOWS
+#include <windows.h>
+#endif
+static void pumpGUIEvents() {
+#if JUCE_WINDOWS
+    MSG m{};
+    for(int i=0;i<256 && PeekMessageW(&m,nullptr,0,0,PM_REMOVE);++i){
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+#endif
+}
 
 int main()
 {
@@ -78,7 +90,7 @@ int main()
           b->triggerClick();
           // JUCE delivers Button::triggerClick via the MessageManager queue.
           // The smoke test is a console app, so pump messages explicitly.
-          juce::MessageManager::getInstance()->runDispatchLoopUntil(25);
+          pumpGUIEvents();
           return true;
         }
       return false;
@@ -108,7 +120,7 @@ int main()
     bool clickedFX=false,hasChorus=false,hasTape=false,hasModes=false;
     for(int i=0;i<editor->getNumChildComponents();++i)
         if(auto* b=dynamic_cast<juce::Button*>(editor->getChildComponent(i));
-           b&&b->getButtonText()=="FX"){b->triggerClick();juce::MessageManager::getInstance()->runDispatchLoopUntil(25);clickedFX=true;break;}
+           b&&b->getButtonText()=="FX"){b->triggerClick();pumpGUIEvents();clickedFX=true;break;}
     for(int i=0;i<editor->getNumChildComponents();++i){
         auto* component=editor->getChildComponent(i);
         if(auto* b=dynamic_cast<juce::Button*>(component)){
