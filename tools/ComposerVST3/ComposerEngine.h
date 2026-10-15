@@ -230,7 +230,21 @@ inline void generateDrums(const Settings& s, int bar, Bar& result) noexcept {
     for (int kind=0;kind<2;++kind) {
         const int n = kind==0?5:4;
         for (int j=0;j<n;++j) {
-            const int pos = kind==0?kicks[st][j]:snare[st][j];
+            int pos = kind==0?kicks[st][j]:snare[st][j];
+            if (s.rhythm==1) { // Half-time: kick on 1, late push; snare on 3.
+                static constexpr int halfKick[5]={0,10,-1,-1,-1};
+                static constexpr int halfSnare[4]={8,-1,-1,-1};
+                pos=kind==0?halfKick[j]:halfSnare[j];
+            } else if(s.rhythm==2) { // Backbeat stays grounded, kick syncopates.
+                static constexpr int syncKick[5]={0,3,7,10,14};
+                pos=kind==0?syncKick[j]:snare[st][j];
+            } else if(s.rhythm==4) {
+                static constexpr int euclidKick[5]={0,4,7,10,13};
+                pos=kind==0?euclidKick[j]:snare[st][j];
+            } else if(s.rhythm==5) {
+                static constexpr int brokenKick[5]={0,3,6,10,14};
+                pos=kind==0?brokenKick[j]:snare[st][j];
+            }
             if(pos<0)continue;
             if(pos==0 || chance(s,bar,100+kind*16+pos,.75f+.25f*s.density)) {
                 const double at=humanTime(s,bar,300+kind*17+pos,
