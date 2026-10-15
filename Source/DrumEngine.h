@@ -10,13 +10,13 @@ struct Pattern { std::array<std::array<PatternStep,64>,12> step{}; int length=16
 struct SampleSlot { juce::AudioBuffer<float> audio; double sourceRate=44100.0,pos=0.0; bool loaded=false,active=false,reverse=false; juce::String sourcePath; float pitch=1.0f,level=1.0f; void trigger(){if(loaded){active=true;pos=reverse?(double)audio.getNumSamples()-1.0:0.0;}} float process(double outRate){if(!loaded||!active||audio.getNumSamples()<2)return 0;int i=juce::jlimit(0,audio.getNumSamples()-2,(int)pos);float frac=(float)(pos-i);float x=audio.getSample(0,i)*(1-frac)+audio.getSample(0,i+1)*frac;double inc=(sourceRate/outRate)*pitch*(reverse?-1.0:1.0);pos+=inc;if(pos<0||pos>=audio.getNumSamples()-1)active=false;return x*level;} };
 
 struct VoiceDSP {
- double sr=44100.0, phase=0, phase2=0; float env=0, noiseEnv=0, velocity=0; int kind=0; float tune=0.5f,decay=0.5f,tone=0.5f,character=0.5f; juce::Random rng;
+ double sr=44100.0, phase=0, phase2=0; float env=0, noiseEnv=0, velocity=0; int kind=0; float tune=0.5f,decay=0.5f,tone=0.5f,character=0.5f; float cachedTuneMul=1.0f; juce::Random rng;
  void prepare(double s){sr=s;}
  void trigger(float v,int k){kind=k;velocity=v;env=v;noiseEnv=v;phase=phase2=0;}
  float process(){
   if(env<1.0e-5f && noiseEnv<1.0e-5f)return 0.0f;
   const float n=rng.nextFloat()*2.0f-1.0f; double f=80.0;
-  float tuneMul=std::pow(2.0f,(tune-.5f)*2.0f);
+  float tuneMul=cachedTuneMul;
   switch(kind){
    case 0:f=48.0+120.0*env;break; case 1:f=185.0;break; case 2:f=95.0;break; case 3:f=420.0;break;
    case 4:f=155.0;break; case 5:f=240.0;break; case 6:f=330.0;break; case 7:f=520.0;break;
@@ -69,7 +69,7 @@ public:
  void mutate(float amount){auto&p=pattern(current);for(int v=0;v<voices;v++)for(int s=0;s<p.length;s++)if(random.nextFloat()<amount*.18f)p.step[v][s].on=!p.step[v][s].on;}
  void fill(){auto&p=pattern(current);for(int s=juce::jmax(0,p.length-4);s<p.length;s++){p.step[3][s].on=true;p.step[3][s].velocity=.65f+.1f*(s&1);p.step[4][s].on=(s&1)!=0;}}
  void process(juce::AudioBuffer<float>&out,std::array<juce::AudioBuffer<float>*,voices>* stems=nullptr){
-  out.clear(); if(stems)for(auto*sb:*stems)if(sb)sb->clear(); const int n=out.getNumSamples(); const double base=sr*60.0/bpm/4.0;
+  out.clear(); if(stems)for(auto*sb:*stems)if(sb)sb->clear(); const int n=out.getNumSamples(); const double base=sr*60.0/bpm/4.0; for(auto& voice:dsp) voice.cachedTuneMul=std::pow(2.0f,(voice.tune-.5f)*2.0f);
   if(hostPlaying&&hasPpq){int target=((int)std::floor(hostPpq*4.0))%juce::jmax(1,pattern(current).length);if(target!=step){step=target-1;samplesToStep=0;}hasPpq=false;}
   for(int i=0;i<n;i++){for(int v=0;v<voices;v++){if(pendingMicro[v]>0&&--pendingMicro[v]==0)trigger(v,pendingVelocity[v]);if(pendingFlam[v]>0&&--pendingFlam[v]==0)trigger(v,.72f);if(pendingRatchet[v]>0&&ratchetCounter[v]<=0){trigger(v,.68f);pendingRatchet[v]--;ratchetCounter[v]=(int)juce::jmax(1.0,base/(pendingRatchet[v]+2));}if(ratchetCounter[v]>0)--ratchetCounter[v];}
    if(hostPlaying&&samplesToStep<=0){advance();double d=base*((step&1)?1.0+swing:1.0-swing);samplesToStep+=juce::jmax(1.0,d);}
