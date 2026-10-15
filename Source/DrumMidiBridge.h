@@ -49,6 +49,27 @@ inline bool importPattern(DrumEngine& engine,int index,const juce::File& source)
     if(!input.openedOk()||!midi.readFrom(input)||midi.getTimeFormat()<=0)return false;
     auto p=engine.pattern(index); // don't destroy the existing pattern on failure
     bool any=false;
+    // Recover independent triplets when source MIDI contains off-grid notes.
+    // Fully coincident positions (downbeats) retain the user's current choice.
+    std::array<double,DrumEngine::voices> errorStraight{},errorTriplet{};
+    for(int trackIndex=0;trackIndex<midi.getNumTracks();++trackIndex){
+        auto* track=midi.getTrack(trackIndex);if(!track)continue;
+        for(int i=0;i<track->getNumEvents();++i){
+            const auto& m=track->getEventPointer(i)->message;
+            if(!m.isNoteOn())continue;
+            const int voice=m.getChannel()==2?11:m.getNoteNumber()-36;
+            if(voice<0||voice>=DrumEngine::voices)continue;
+            const double tick=m.getTimeStamp()*kPPQ/midi.getTimeFormat();
+            errorStraight[(size_t)voice]+=std::abs(tick-std::round(tick/240.0)*240.0);
+            errorTriplet[(size_t)voice]+=std::abs(tick-std::round(tick/160.0)*160.0);
+        }
+    }
+    for(int v=0;v<DrumEngine::voices;++v){
+        if(errorTriplet[(size_t)v]+4.0<errorStraight[(size_t)v])
+            p.trackTriplet[(size_t)v]=true;
+        else if(errorStraight[(size_t)v]+4.0<errorTriplet[(size_t)v])
+            p.trackTriplet[(size_t)v]=false;
+    }
     std::array<int,DrumEngine::voices> greatestStep{};
     for(int trackIndex=0;trackIndex<midi.getNumTracks();++trackIndex){
         auto* track=midi.getTrack(trackIndex);
