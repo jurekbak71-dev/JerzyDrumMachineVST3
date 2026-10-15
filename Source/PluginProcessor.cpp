@@ -79,6 +79,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
  p.push_back(std::make_unique<juce::AudioParameterFloat>("comp_attack","Compressor Attack ms",juce::NormalisableRange<float>(0.1f,100.0f),10.0f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("comp_release","Compressor Release ms",juce::NormalisableRange<float>(10.0f,500.0f),120.0f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("comp_boost","Compressor Input Boost dB",0.0f,24.0f,0.0f));
+ // Appended-only FX IDs keep all existing FL Studio automation mapping unchanged.
+ for(int i=0;i<12;i++){
+    const auto prefix="ch"+juce::String(i)+"_";
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(prefix+"chorus","Ch "+juce::String(i+1)+" Chorus Send",0.0f,1.0f,0.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(prefix+"tape","Ch "+juce::String(i+1)+" Tape Send",0.0f,1.0f,0.0f));
+ }
+ p.push_back(std::make_unique<juce::AudioParameterBool>("chorus_on","Chorus/Widener On",false));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("chorus_mix","Chorus Return",0.f,1.f,.35f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("chorus_depth","Chorus Modulation Depth",0.f,1.f,.45f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("chorus_width","Stereo Widener",0.f,1.f,.6f));
+ p.push_back(std::make_unique<juce::AudioParameterBool>("tape_on","Tape Drive On",false));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("tape_mix","Tape Drive Return",0.f,1.f,.25f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("tape_age","Tape Saturation / Age",0.f,1.f,.42f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("tape_wear","Tape Wear / Mechanics",0.f,1.f,.3f));
+ p.push_back(std::make_unique<juce::AudioParameterFloat>("tape_filter","Tape Filter LPF",0.f,1.f,.75f));
+ p.push_back(std::make_unique<juce::AudioParameterChoice>("delay_mode","Delay Engine",
+    juce::StringArray{"Classic / Ping-Pong","Stereo","Tape Echo","Sample & Hold","Diffuse Dub"},0));
  return {p.begin(),p.end()};
 }
 void JerzyDrumMachineAudioProcessor::prepareToPlay(double s,int){engine.prepare(s);}
@@ -93,12 +110,14 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  engine.drive=param("drive");engine.setSwing(param("swing"));
  for(int i=0;i<12;i++){
   auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";
-  engine.gain[i]=param(prefix+"gain");engine.panorama[i]=param(prefix+"pan");engine.channelFilter[i]=param(prefix+"filter");engine.channelDrive[i]=param(prefix+"drive");engine.reverbSend[i]=param(prefix+"rev");engine.delaySend[i]=param(prefix+"del");engine.mute[i]=param(prefix+"mute")>.5f;engine.solo[i]=param(prefix+"solo")>.5f;
+  engine.gain[i]=param(prefix+"gain");engine.panorama[i]=param(prefix+"pan");engine.channelFilter[i]=param(prefix+"filter");engine.channelDrive[i]=param(prefix+"drive");engine.reverbSend[i]=param(prefix+"rev");engine.delaySend[i]=param(prefix+"del");engine.chorusSend[i]=param(prefix+"chorus");engine.tapeSend[i]=param(prefix+"tape");engine.mute[i]=param(prefix+"mute")>.5f;engine.solo[i]=param(prefix+"solo")>.5f;
   engine.setVoiceParam(i,0,param(voice+"tune"));engine.setVoiceParam(i,1,param(voice+"decay"));engine.setVoiceParam(i,2,param(voice+"tone"));engine.setVoiceParam(i,3,param(voice+"character"));
   if(i==4||i==5||i==6){engine.setVoiceExtraParam(i,0,param(voice+"extra1"));engine.setVoiceExtraParam(i,1,param(voice+"extra2"));}
  }
  engine.setReverb(param("rev_size"),param("rev_damp"),param("rev_mix"));engine.setReverbEnabled(param("reverb_on")>.5f);
- engine.setDelay(param("delay_beats"),param("delay_fb"),param("delay_mix"));engine.setDelayEnabled(param("delay_on")>.5f);engine.setDelayPingPong(param("delay_pingpong")>.5f);
+ engine.setDelay(param("delay_beats"),param("delay_fb"),param("delay_mix"));engine.setDelayEnabled(param("delay_on")>.5f);engine.setDelayPingPong(param("delay_pingpong")>.5f);engine.setDelayMode((int)param("delay_mode"));
+ engine.setChorus(param("chorus_mix"),param("chorus_depth"),param("chorus_width"),param("chorus_on")>.5f);
+ engine.setTape(param("tape_mix"),param("tape_age"),param("tape_wear"),param("tape_filter"),param("tape_on")>.5f);
  engine.setMaster(param("master_bass"),param("master_mid"),param("master_treble"),param("master_comp"));
  engine.setMasterFilter(param("master_filter"));
  engine.setTripletSubdivision((int)param("seq_division")==1);engine.setSynthTranspose((int)param("synth_transpose")-2);engine.setCompressor(param("comp_on")>.5f,param("comp_threshold"),param("comp_ratio"),param("comp_attack"),param("comp_release"));
@@ -119,8 +138,10 @@ void JerzyDrumMachineAudioProcessor::setStateInformation(const void*d,int n){if(
 void JerzyDrumMachineAudioProcessor::syncParametersFromEngine(){
  auto set=[this](const juce::String&id,float value){if(auto*par=apvts.getParameter(id))par->setValueNotifyingHost(par->convertTo0to1(value));};
  set("drive",engine.drive);
- for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";set(prefix+"gain",engine.gain[i]);set(prefix+"pan",engine.panorama[i]);set(prefix+"filter",engine.channelFilter[i]);set(prefix+"drive",engine.channelDrive[i]);set(prefix+"rev",engine.reverbSend[i]);set(prefix+"del",engine.delaySend[i]);set(prefix+"mute",engine.mute[i]?1.0f:0.0f);set(prefix+"solo",engine.solo[i]?1.0f:0.0f);set(voice+"tune",engine.getVoiceParam(i,0));set(voice+"decay",engine.getVoiceParam(i,1));set(voice+"tone",engine.getVoiceParam(i,2));set(voice+"character",engine.getVoiceParam(i,3));if(i==4||i==5||i==6){set(voice+"extra1",engine.getVoiceExtraParam(i,0));set(voice+"extra2",engine.getVoiceExtraParam(i,1));}}
+ for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";set(prefix+"gain",engine.gain[i]);set(prefix+"pan",engine.panorama[i]);set(prefix+"filter",engine.channelFilter[i]);set(prefix+"drive",engine.channelDrive[i]);set(prefix+"rev",engine.reverbSend[i]);set(prefix+"del",engine.delaySend[i]);set(prefix+"chorus",engine.chorusSend[i]);set(prefix+"tape",engine.tapeSend[i]);set(prefix+"mute",engine.mute[i]?1.0f:0.0f);set(prefix+"solo",engine.solo[i]?1.0f:0.0f);set(voice+"tune",engine.getVoiceParam(i,0));set(voice+"decay",engine.getVoiceParam(i,1));set(voice+"tone",engine.getVoiceParam(i,2));set(voice+"character",engine.getVoiceParam(i,3));if(i==4||i==5||i==6){set(voice+"extra1",engine.getVoiceExtraParam(i,0));set(voice+"extra2",engine.getVoiceExtraParam(i,1));}}
  set("rev_size",engine.reverbSize);set("rev_damp",engine.reverbDamping);set("rev_mix",engine.reverbMix);set("reverb_on",engine.reverbEnabled?1.0f:0.0f);
+ set("delay_mode",(float)engine.delayMode);set("chorus_on",engine.chorusEnabled?1.f:0.f);set("chorus_mix",engine.chorusMix);set("chorus_depth",engine.chorusDepth);set("chorus_width",engine.chorusWidth);
+ set("tape_on",engine.tapeEnabled?1.f:0.f);set("tape_mix",engine.tapeMix);set("tape_age",engine.tapeAge);set("tape_wear",engine.tapeWear);set("tape_filter",engine.tapeFilter);
  set("delay_beats",engine.delayBeats);set("delay_fb",engine.delayFeedback);set("delay_mix",engine.delayMix);set("delay_on",engine.delayEnabled?1.0f:0.0f);set("delay_pingpong",engine.delayPingPong?1.0f:0.0f);
  set("master_bass",engine.masterBass);set("master_mid",engine.masterMid);set("master_treble",engine.masterTreble);set("master_comp",engine.masterComp);
  set("master_filter",engine.masterFilter);
