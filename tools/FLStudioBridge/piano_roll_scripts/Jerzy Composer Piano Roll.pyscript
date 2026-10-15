@@ -9,7 +9,7 @@ import flpianoroll as flp
 MODES = ['Perkusja - groove', 'Bas - riff', 'Akordy - harmonia',
          'Arpeggio - ruch akordow', 'Melodia - muzyczne frazy']
 TONICS = ['C', 'C# / Db', 'D', 'D# / Eb', 'E', 'F',
-          'F# / Gb', 'G', 'G# / Ab', 'A', 'A# / Bb', 'B']
+          'F# / Gb', 'G', 'G# / Ab', 'A', 'A# / B (Bb)', 'H (B)']
 OCTAVES = ['C2 - niski', 'C3 - sredni niski', 'C4 - srodkowy',
            'C5 - wysoki', 'C6 - bardzo wysoki']
 SCALE_NAMES = ['Moll naturalna', 'Dur (major)', 'Dorycka', 'Pentatonika moll',
@@ -37,31 +37,31 @@ STYLES = ['Rock', 'Dub / reggae', 'Acid / 303', 'Funk',
           'Ambient', 'House', 'Breakbeat', 'Lo-fi hip-hop']
 DIVISIONS = ['1/8 - osemki', '1/16 - szesnastki',
              '1/16T - triole szesnastek', '1/32 - trzydziestodwojki']
-GATES = ['Staccato - urywane', 'Krotkie', 'Naturalne', 'Legato - laczone']
+GATES = ['Staccato – urywane', 'Krótkie', 'Naturalne', 'Legato – łączone']
 GATE_RATIOS = [0.32, 0.58, 0.85, 1.08]
-COLORS = ['Trojdzweki', 'Septymy (7)', 'Sus2 / Sus4', 'Add9']
-VOICINGS = ['Blisko - zwarta harmonia', 'Szeroko - przestrzennie',
-            'Voice leading - plynne przejscia']
+COLORS = ['Trójdźwięki', 'Septymy (7)', 'Sus2 / Sus4', 'Add9']
+VOICINGS = ['Blisko – zwarta harmonia', 'Szeroko – przestrzennie',
+            'Voice leading – płynne przejścia']
 
 # Names serve as descriptions; hints are visible in the native dialog help panel.
 FIELD = {
     'mode': 'Partia muzyczna',
-    'bars': 'Dlugosc frazy - takty',
-    'tonic': 'Tonika - dzwiek (C, D, E...)',
-    'octave': 'Rejestr - wysokosc / oktawa',
-    'scale': 'Skala - charakter melodii',
-    'progression': 'Progresja - kolejnosc akordow',
-    'style': 'Styl - rodzaj groove',
-    'division': 'Puls rytmiczny - podzial nut',
-    'density': 'Gestosc - ile nut / uderzen',
-    'swing': 'Swing - kolysanie rytmu',
-    'human': 'Naturalnosc - odchylenia',
-    'variation': 'Wariacje - rozwoj frazy',
-    'gate': 'Artykulacja - dlugosc nut',
-    'color': 'Brzmienie harmonii - akord',
-    'voicing': 'Uklad akordow - rozlozenie',
+    'bars': 'Długość frazy – takty',
+    'tonic': 'Tonika – dźwięk (C, D, E…)',
+    'octave': 'Rejestr – wysokość / oktawa',
+    'scale': 'Skala – charakter melodii',
+    'progression': 'Progresja – kolejność akordów',
+    'style': 'Styl – rodzaj groove’u',
+    'division': 'Puls rytmiczny – podział nut',
+    'density': 'Gęstość – ile nut / uderzeń',
+    'swing': 'Swing – kołysanie rytmu',
+    'human': 'Naturalność – odchylenia',
+    'variation': 'Wariacje – rozwój frazy',
+    'gate': 'Artykulacja – długość nut',
+    'color': 'Harmonia – rodzaj akordu',
+    'voicing': 'Układ akordów – rozłożenie',
     'seed': 'Wariant - numer pomyslu',
-    'replace': 'Zastap istniejace nuty',
+    'replace': 'Zastąp istniejące nuty',
 }
 
 
