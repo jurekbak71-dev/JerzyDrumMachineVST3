@@ -216,6 +216,36 @@ public:
  void setPreviewPlaying(bool shouldPlay){previewPlaying.store(shouldPlay,std::memory_order_relaxed);}
  void setVirtualDrummer(bool enabled){if(enabled==virtualDrummerEnabled)return;virtualDrummerEnabled=enabled;generatedBars=0;if(enabled){savedPattern=pattern(current);auto&p=pattern(current);p.length=juce::jmax(16,p.length);for(int v=0;v<voices;v++)p.trackLength[(size_t)v]=p.length;buildVirtualBar(0);}else pattern(current)=savedPattern;}
  void setVirtualDrummerSettings(int styleIn,int divisionIn,float energyIn,float humanizeIn,float syncopationIn,int phraseBarsIn,int fillEveryIn=4,int breakEveryIn=8,int kickDivisionIn=1){drummerStyle=juce::jlimit(0,6,styleIn);hatDivision=divisionIn==1?4:(divisionIn==2?2:1);drummerEnergy=juce::jlimit(0.f,1.f,energyIn);drummerSyncopation=juce::jlimit(0.f,1.f,syncopationIn);drummerHumanize=juce::jlimit(0.f,1.f,humanizeIn);phraseBars=juce::jlimit(1,16,phraseBarsIn);fillEveryBars=juce::jlimit(1,32,fillEveryIn);breakEveryBars=juce::jlimit(1,32,breakEveryIn);kickDivision=1<<(juce::jlimit(1,4,kickDivisionIn)-1);if(virtualDrummerEnabled)buildVirtualBar(generatedBars);}
+ // COPY/PASTE operates on one visible 16-step bank. Unlike whole-track
+ // assignment it never overwrites the other three banks.
+ bool pasteBank(int destPattern,int destVoice,int destBank,
+                const std::array<PatternStep,16>& source) {
+    if(destPattern<0||destPattern>=patterns||destVoice<0||destVoice>=voices||
+       destBank<0||destBank>=4)return false;
+    auto& dest=pattern(destPattern);
+    const int first=destBank*16;
+    for(int n=0;n<16;++n)dest.step[(size_t)destVoice][(size_t)(first+n)]=source[(size_t)n];
+    dest.trackLength[(size_t)destVoice]=juce::jmax(dest.trackLength[(size_t)destVoice],first+16);
+    dest.length=juce::jmax(dest.length,first+16);
+    return true;
+ }
+ std::array<PatternStep,16> copyBank(int sourcePattern,int sourceVoice,int sourceBank)const {
+    std::array<PatternStep,16> copied{};
+    if(sourcePattern<0||sourcePattern>=patterns||sourceVoice<0||sourceVoice>=voices||
+       sourceBank<0||sourceBank>=4)return copied;
+    const auto& p=pats[(size_t)sourcePattern];
+    for(int n=0;n<16;++n)copied[(size_t)n]=p.step[(size_t)sourceVoice][(size_t)(sourceBank*16+n)];
+    return copied;
+ }
+ void clearVoice(int voice) {
+    if(voice<0||voice>=voices)return;
+    virtualDrummerEnabled.store(false,std::memory_order_relaxed);
+    auto& p=pattern(current);
+    for(auto& st:p.step[(size_t)voice])st=PatternStep{};
+    pendingMicro[(size_t)voice]=pendingRatchet[(size_t)voice]=pendingFlam[(size_t)voice]=0;
+    pendingVelocity[(size_t)voice]=0;
+    trackStep[(size_t)voice]=-1;
+ }
  void clearSequence(){virtualDrummerEnabled.store(false,std::memory_order_relaxed);auto& pat=pattern(current);pendingMicro.fill(0);pendingRatchet.fill(0);pendingFlam.fill(0);trackStep.fill(-1);for(auto& track:pat.step)for(auto& st:track){st.on=false;st.velocity=.85f;st.probability=1.f;st.ratchet=1;st.note=60;st.micro=0.f;st.accent=st.flam=false;st.soundMask=0;st.sound.fill(0.f);}}
  bool isVirtualDrummerEnabled()const{return virtualDrummerEnabled;}
  static constexpr int maxSongEntries=16;
