@@ -7,10 +7,22 @@ static const std::array<juce::Colour,12> channelColours={{juce::Colour(0xffe06a3
 JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(JerzyDrumMachineAudioProcessor&x):AudioProcessorEditor(&x),p(x){
  setLookAndFeel(&copper);setSize(1280,840);setResizable(true,true);setResizeLimits(1080,800,1920,1080);
  for(auto*b:{&seq,&sound,&mix,&fxPage,&drummer,&songPage,&run,&generate,&mutate,&fill,&loadSample,&saveKit,&loadKit,&songAdd,&songRemove,&songPlay,&randomizeSeed})addAndMakeVisible(*b);addAndMakeVisible(showSynthKeyboard);
+ addAndMakeVisible(playbackMode);
+ playbackMode.addItem("MIDI / PIANO ROLL",1);
+ playbackMode.addItem("INTERNAL SEQ",2);
+ playbackMode.setSelectedId(1,juce::dontSendNotification);
+ playbackMode.setTooltip("MIDI: only FL Piano Roll plays, never the internal sequencer. SEQ: host tempo/transport drives the internal pattern.");
+ playbackModeAtt=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(p.apvts,"playback_mode",playbackMode);
  for(auto*b:{&seq,&sound,&mix,&fxPage,&drummer,&songPage})b->setClickingTogglesState(true);seq.setToggleState(true,juce::dontSendNotification);
  auto setPage=[this](int pg){page=pg;seq.setToggleState(pg==0,juce::dontSendNotification);sound.setToggleState(pg==1,juce::dontSendNotification);mix.setToggleState(pg==2,juce::dontSendNotification);fxPage.setToggleState(pg==3,juce::dontSendNotification);drummer.setToggleState(pg==4,juce::dontSendNotification);songPage.setToggleState(pg==5,juce::dontSendNotification);resized();repaint();};
  seq.onClick=[setPage]{setPage(0);};sound.onClick=[setPage]{setPage(1);};mix.onClick=[setPage]{setPage(2);};fxPage.onClick=[setPage]{setPage(3);};drummer.onClick=[setPage]{setPage(4);};songPage.onClick=[setPage]{setPage(5);};
- run.setClickingTogglesState(true);run.onClick=[this]{p.engine.setPreviewPlaying(run.getToggleState());run.setButtonText(run.getToggleState()?"STOP":"RUN");};
+ run.setClickingTogglesState(true);run.onClick=[this]{
+    const bool isSeqMode=playbackMode.getSelectedId()==2;
+    const bool play=isSeqMode&&run.getToggleState();
+    p.engine.setPreviewPlaying(play);
+    run.setToggleState(play,juce::dontSendNotification);
+    run.setButtonText(play?"STOP":"SEQ RUN");
+ };
  drummerEnable.setClickingTogglesState(true);drummerEnable.onClick=[this]{p.engine.setVirtualDrummer(drummerEnable.getToggleState());syncVisibleSteps();repaint();};addAndMakeVisible(drummerEnable);
  for(auto&s:drummerParam){addAndMakeVisible(s);s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);s.setTextBoxStyle(juce::Slider::TextBoxBelow,false,60,20);s.setRange(0,1,.01);}
  drummerParam[0].setValue(.55);drummerParam[1].setValue(.2);drummerParam[2].setValue(.25);
@@ -50,7 +62,15 @@ JerzyDrumMachineAudioProcessorEditor::JerzyDrumMachineAudioProcessorEditor(Jerzy
  addAndMakeVisible(songPatternSelect);addAndMakeVisible(songSectionSelect);addAndMakeVisible(songBars);
  songAdd.onClick=[this]{p.engine.setSongEntry(selectedSongSlot,songPatternSelect.getSelectedId()-1,songSectionSelect.getSelectedId()-1,songBars.getSelectedId());selectedSongSlot=juce::jmin(DrumEngine::maxSongEntries-1,selectedSongSlot+1);syncSongSlots();};
  songRemove.onClick=[this]{p.engine.removeSongEntry(selectedSongSlot);selectedSongSlot=juce::jmin(selectedSongSlot,juce::jmax(0,p.engine.getSongLength()-1));syncSongSlots();};
- songPlay.setClickingTogglesState(true);songPlay.onClick=[this]{const bool requested=songPlay.getToggleState();p.engine.setSongPlaying(requested);const bool playing=p.engine.isSongPlaying();songPlay.setToggleState(playing,juce::dontSendNotification);songPlay.setButtonText(playing?"STOP SONG":"PLAY SONG");p.engine.setPreviewPlaying(playing);syncSongSlots();};
+ songPlay.setClickingTogglesState(true);songPlay.onClick=[this]{
+    const bool requested=playbackMode.getSelectedId()==2&&songPlay.getToggleState();
+    p.engine.setSongPlaying(requested);
+    const bool playing=p.engine.isSongPlaying();
+    songPlay.setToggleState(playing,juce::dontSendNotification);
+    songPlay.setButtonText(playing?"STOP SONG":"PLAY SONG");
+    p.engine.setPreviewPlaying(playing);
+    syncSongSlots();
+ };
 
  for(auto*s:{&synthWave1,&synthWave2}){addAndMakeVisible(*s);s->addItem("SINE",1);s->addItem("SAW",2);s->addItem("SQUARE",3);s->addItem("TRIANGLE",4);}
  addAndMakeVisible(synthOctave);for(int oct=-2;oct<=2;oct++)synthOctave.addItem("KEY OCT "+juce::String(oct>0?"+":"")+juce::String(oct),oct+3);synthOctave.setSelectedId(3);
@@ -302,8 +322,8 @@ void JerzyDrumMachineAudioProcessorEditor::resized(){
  // Components are all registered with addAndMakeVisible in the constructor.
  // Hide first so a newly opened editor can never show controls from every page.
  for(int i=0;i<getNumChildComponents();++i)getChildComponent(i)->setVisible(false);
- const int navX=w-718;seq.setVisible(true);sound.setVisible(true);mix.setVisible(true);fxPage.setVisible(true);drummer.setVisible(true);songPage.setVisible(true);
- seq.setBounds(navX,18,96,38);sound.setBounds(navX+100,18,96,38);mix.setBounds(navX+200,18,96,38);fxPage.setBounds(navX+300,18,82,38);drummer.setBounds(navX+386,18,112,38);songPage.setBounds(navX+504,18,88,38);run.setVisible(page==0||page==4);run.setBounds(navX+602,18,94,38);
+ const int navX=w-718;playbackMode.setVisible(true);playbackMode.setBounds(18,18,218,38);seq.setVisible(true);sound.setVisible(true);mix.setVisible(true);fxPage.setVisible(true);drummer.setVisible(true);songPage.setVisible(true);
+ seq.setBounds(navX,18,96,38);sound.setBounds(navX+100,18,96,38);mix.setBounds(navX+200,18,96,38);fxPage.setBounds(navX+300,18,82,38);drummer.setBounds(navX+386,18,112,38);songPage.setBounds(navX+504,18,88,38);run.setVisible((page==0||page==4)&&playbackMode.getSelectedId()==2);run.setBounds(navX+602,18,94,38);
  bool isSeq=page==0,isSound=page==1,isMix=page==2,isFx=page==3,isDrummer=page==4,isSong=page==5;
  for(int position=0;position<12;position++){
   const int i=instrumentOrder[(size_t)position];
