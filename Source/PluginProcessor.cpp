@@ -96,6 +96,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
  p.push_back(std::make_unique<juce::AudioParameterFloat>("tape_filter","Tape Filter LPF",0.f,1.f,.75f));
  p.push_back(std::make_unique<juce::AudioParameterChoice>("delay_mode","Delay Engine",
     juce::StringArray{"Classic / Ping-Pong","Stereo","Tape Echo","Sample & Hold","Diffuse Dub"},0));
+ // Added only at the end: all existing automation parameter IDs stay unchanged.
+ p.push_back(std::make_unique<juce::AudioParameterChoice>("playback_mode",
+      "Playback Source",juce::StringArray{"MIDI / Piano Roll","Internal SEQ"},0));
+ p.push_back(std::make_unique<juce::AudioParameterBool>("pattern_midi_control",
+      "Enable MIDI Ch16 Pattern Select",false));
  return {p.begin(),p.end()};
 }
 void JerzyDrumMachineAudioProcessor::prepareToPlay(double s,int){engine.prepare(s);}
@@ -107,6 +112,10 @@ bool JerzyDrumMachineAudioProcessor::isBusesLayoutSupported(const BusesLayout&l)
 void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juce::MidiBuffer&m){
  juce::ScopedNoDenormals no;
  auto param=[this](const juce::String&id){if(auto*v=apvts.getRawParameterValue(id))return v->load();return 0.0f;};
+ // Unlike the old implementation, starting FL Studio's transport NEVER starts
+ // the internal sequencer in MIDI / Piano Roll mode (including offline render).
+ const bool internalSequence=(int)param("playback_mode")==1;
+ engine.setSequencerEnabled(internalSequence);
  engine.drive=param("drive");engine.setSwing(param("swing"));
  for(int i=0;i<12;i++){
   auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";
@@ -126,7 +135,13 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  engine.setArtifactSettings(param("artifact_enable")>.5f,param("artifact_amount"),(uint32_t)param("artifact_seed"));
  double bpm=120; bool playing=true; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
  engine.setHost(bpm,playing);
- for(const auto meta:m){auto msg=meta.getMessage();const int note=msg.getNoteNumber();if(msg.isNoteOff()){if(msg.getChannel()==2||(msg.getChannel()==1&&(note<36||note>=48)))engine.releaseSynthNote(note);}else if(msg.isNoteOn()){if(msg.getChannel()==2)engine.triggerSynthNote(note,msg.getFloatVelocity());else if(msg.getChannel()==16&&note>=60&&note<92)engine.requestPattern(note-60);else if(msg.getChannel()==1&&note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else engine.triggerSynthNote(note,msg.getFloatVelocity());}}
+ // MIDI events are timestamped by FL Studio. The old code fired all notes at
+ // the start of each block and treated Ch16 C4..G6 as silent pattern controls.
+ // Pattern switching is now disabled by default and opt-in only in SEQ mode.
+ engine.clearHostMidiEvents();
+ const bool patternSelectEnabled=internalSequence&&param("pattern_midi_control")>.5f;
+ for(const auto meta:m)
+    engine.enqueueHostMidi(meta.getMessage(),meta.samplePosition,patternSelectEnabled);
  auto master=getBusBuffer(b,false,0);
  std::array<juce::AudioBuffer<float>,DrumEngine::voices> stemViews;
  std::array<juce::AudioBuffer<float>*,DrumEngine::voices> stems{};
