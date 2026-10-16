@@ -54,7 +54,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
  p.push_back(std::make_unique<juce::AudioParameterFloat>("synth_detune","Synth Oscillator Detune cents",-50.0f,50.0f,7.0f));
  p.push_back(std::make_unique<juce::AudioParameterInt>("synth_octave","Synth Oscillator Octave",-2,2,0));
  p.push_back(std::make_unique<juce::AudioParameterChoice>("synth_transpose","Synth Keyboard Octave",juce::StringArray{"-2 OCT","-1 OCT","0 OCT","+1 OCT","+2 OCT"},2));
- p.push_back(std::make_unique<juce::AudioParameterChoice>("seq_division","Sequencer Division",juce::StringArray{"1/16","1/16 TRIPLET"},0));
+ p.push_back(std::make_unique<juce::AudioParameterChoice>("play_mode","Playback Source",juce::StringArray{"MIDI / PIANO ROLL","INTERNAL SEQ"},0));
+  p.push_back(std::make_unique<juce::AudioParameterChoice>("seq_division","Sequencer Division",juce::StringArray{"1/16","1/16 TRIPLET"},0));
  p.push_back(std::make_unique<juce::AudioParameterBool>("synth_filter","Synth Filter On",true));
  p.push_back(std::make_unique<juce::AudioParameterBool>("artifact_enable","Seed Randomize",false));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("artifact_amount","Artifact Amount",0.0f,1.0f,.25f));
@@ -101,11 +102,11 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  engine.setDelay(param("delay_beats"),param("delay_fb"),param("delay_mix"));engine.setDelayEnabled(param("delay_on")>.5f);engine.setDelayPingPong(param("delay_pingpong")>.5f);
  engine.setMaster(param("master_bass"),param("master_mid"),param("master_treble"),param("master_comp"));
  engine.setMasterFilter(param("master_filter"));
- engine.setTripletSubdivision((int)param("seq_division")==1);engine.setSynthTranspose((int)param("synth_transpose")-2);engine.setCompressor(param("comp_on")>.5f,param("comp_threshold"),param("comp_ratio"),param("comp_attack"),param("comp_release"));
+ engine.setSequencerMode((int)param("play_mode")==1);engine.setTripletSubdivision((int)param("seq_division")==1);engine.setSynthTranspose((int)param("synth_transpose")-2);engine.setCompressor(param("comp_on")>.5f,param("comp_threshold"),param("comp_ratio"),param("comp_attack"),param("comp_release"));
  engine.setCompressorBoost(param("comp_boost"));
  engine.configureSynth(param("synth_attack"),param("synth_decay"),param("synth_sustain"),param("synth_release"),param("synth_cutoff"),param("synth_resonance"),(int)param("synth_wave1"),(int)param("synth_wave2"),param("synth_osc2")>.5f,param("synth_osc2mix"),param("synth_detune"),(int)param("synth_octave"),param("synth_filter")>.5f);
  engine.setArtifactSettings(param("artifact_enable")>.5f,param("artifact_amount"),(uint32_t)param("artifact_seed"));
- double bpm=120; bool playing=true; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
+ double bpm=120; bool playing=false; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(engine.isSequencerMode())if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
  engine.setHost(bpm,playing);
  for(const auto meta:m){auto msg=meta.getMessage();const int note=msg.getNoteNumber();if(msg.isNoteOff()){if(msg.getChannel()==2||(msg.getChannel()==1&&(note<36||note>=48)))engine.releaseSynthNote(note);}else if(msg.isNoteOn()){if(msg.getChannel()==2)engine.triggerSynthNote(note,msg.getFloatVelocity());else if(msg.getChannel()==16&&note>=60&&note<92)engine.requestPattern(note-60);else if(msg.getChannel()==1&&note>=36&&note<48)engine.trigger(note-36,msg.getFloatVelocity());else engine.triggerSynthNote(note,msg.getFloatVelocity());}}
  auto master=getBusBuffer(b,false,0);
