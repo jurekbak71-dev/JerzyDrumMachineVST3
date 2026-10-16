@@ -56,10 +56,10 @@ int main()
 
   SampleSlot sampleSlot;sampleSlot.audio.setSize(1,4096);sampleSlot.audio.clear();for(int i=0;i<4096;i++)sampleSlot.audio.setSample(0,i,1.0f);sampleSlot.loaded=true;sampleSlot.trigger(1.625f,1,0.0f,0.0f);sampleSlot.process(48000.0);if(std::abs(sampleSlot.playbackPitch-1.625f)>.001f||!sampleSlot.playbackReverse||!sampleSlot.decayEnabled||!sampleSlot.toneEnabled||sampleSlot.playbackToneAlpha>.1f){log("FAIL: sample pitch, decay, tone, and reverse step controls did not apply");return 36;}
   PatternStep synthStep;synthStep.soundMask=1|2|4|8;synthStep.sound[0]=1.0f;synthStep.sound[1]=.75f;synthStep.sound[2]=.25f;synthStep.sound[3]=.5f;VoiceDSP synthAutomation;synthAutomation.prepare(48000.0);synthAutomation.synthDecayMs=180.0f;synthAutomation.sustain=.72f;synthAutomation.synthNoteOn(60,1.0f,&synthStep);if(synthAutomation.midiNote!=60||synthAutomation.hitSustain!=.25f||std::abs(synthAutomation.attackStep-1.0f/(1000.0f*.001f*48000.0f))>.000001f){log("FAIL: synth step ADSR controls were not applied");return 35;}
-  auto rhythm=std::make_unique<DrumEngine>();rhythm->prepare(48000.0);rhythm->setHost(120.0,false);rhythm->pattern(0).length=64;rhythm->setTrackLength(0,0,3);rhythm->setTrackLength(0,1,5);rhythm->setPreviewPlaying(true);juce::AudioBuffer<float> rhythmAudio(2,36001);rhythm->process(rhythmAudio);
+  auto rhythm=std::make_unique<DrumEngine>();rhythm->prepare(48000.0);rhythm->setHost(120.0,false);rhythm->pattern(0).length=64;rhythm->setTrackLength(0,0,3);rhythm->setTrackLength(0,1,5);rhythm->setSequencerEnabled(true);rhythm->setPreviewPlaying(true);juce::AudioBuffer<float> rhythmAudio(2,36001);rhythm->process(rhythmAudio);
   if(rhythm->getTrackStep(0)!=0||rhythm->getTrackStep(1)!=1){log("FAIL: independent track loops did not advance at separate lengths");return 5;}
-  auto triplets=std::make_unique<DrumEngine>();triplets->prepare(48000.0);triplets->setHost(120.0,false);triplets->pattern(0).length=64;triplets->setTripletSubdivision(true);triplets->setPreviewPlaying(true);juce::AudioBuffer<float> tripletAudio(2,24000);triplets->process(tripletAudio);if(triplets->getCurrentStep()!=5){log("FAIL: triplet grid did not advance six divisions per beat");return 18;}
-  auto independentTriplets=std::make_unique<DrumEngine>();independentTriplets->prepare(48000.0);independentTriplets->setHost(120.0,false);independentTriplets->pattern(0).length=64;independentTriplets->setTrackTriplet(1,true);independentTriplets->setTripletSubdivision(true);independentTriplets->setPreviewPlaying(true);juce::AudioBuffer<float> independentTripletAudio(2,24000);independentTriplets->process(independentTripletAudio);if(independentTriplets->getTrackStep(0)!=3||independentTriplets->getTrackStep(1)!=5){log("FAIL: per-track triplet timing did not diverge independently");return 28;}
+  auto triplets=std::make_unique<DrumEngine>();triplets->prepare(48000.0);triplets->setHost(120.0,false);triplets->pattern(0).length=64;triplets->setTripletSubdivision(true);triplets->setSequencerEnabled(true);triplets->setPreviewPlaying(true);juce::AudioBuffer<float> tripletAudio(2,24000);triplets->process(tripletAudio);if(triplets->getCurrentStep()!=5){log("FAIL: triplet grid did not advance six divisions per beat");return 18;}
+  auto independentTriplets=std::make_unique<DrumEngine>();independentTriplets->prepare(48000.0);independentTriplets->setHost(120.0,false);independentTriplets->pattern(0).length=64;independentTriplets->setTrackTriplet(1,true);independentTriplets->setTripletSubdivision(true);independentTriplets->setSequencerEnabled(true);independentTriplets->setPreviewPlaying(true);juce::AudioBuffer<float> independentTripletAudio(2,24000);independentTriplets->process(independentTripletAudio);if(independentTriplets->getTrackStep(0)!=3||independentTriplets->getTrackStep(1)!=5){log("FAIL: per-track triplet timing did not diverge independently");return 28;}
   auto preview=std::make_unique<DrumEngine>();preview->prepare(48000.0);preview->setHost(120.0,false);preview->setReverbEnabled(false);preview->setDelayEnabled(false);preview->previewSynthNote(60,1.0f);juce::AudioBuffer<float> previewAudio(2,129600);preview->process(previewAudio);double previewTail=0;for(int c=0;c<2;c++)for(int i=110400;i<129600;i++)previewTail+=std::abs(previewAudio.getSample(c,i));if(previewTail>.1){log("FAIL: synth click preview did not end after its short gate and release tail");return 19;}
   auto quickKey=std::make_unique<DrumEngine>();quickKey->prepare(48000.0);quickKey->setHost(120.0,false);quickKey->requestSynthNoteOn(60,1.0f);quickKey->requestSynthNoteOff(60);juce::AudioBuffer<float> quickKeyAudio(2,512);quickKey->process(quickKeyAudio);double quickKeyEnergy=0;for(int c=0;c<2;c++)for(int i=0;i<512;i++)quickKeyEnergy+=std::abs(quickKeyAudio.getSample(c,i));if(quickKeyEnergy<.1){log("FAIL: rapid GUI synth note-on/note-off produced no audio");return 25;}
   auto filteredEnergy=[](float position){DrumEngine engine;engine.prepare(48000.0);engine.setMasterFilter(position);engine.setHost(120.0,false);engine.trigger(0,1.0f);juce::AudioBuffer<float> audio(2,8192);engine.process(audio);double energy=0;for(int c=0;c<2;c++)for(int i=0;i<audio.getNumSamples();i++)energy+=std::abs(audio.getSample(c,i));return energy;};const double filterNeutral=filteredEnergy(.5f),filterHighPass=filteredEnergy(1.0f);if(!(filterNeutral>filterHighPass*1.5)){log("FAIL: master DJ high-pass did not change the signal");return 26;}
@@ -215,6 +215,75 @@ int main()
         log("FAIL: full drum MIDI roundtrip loses independent triplets or synth pitch");return 42;
     }
     log("PASS: MIDI per-voice triplet and synth pitch roundtrip");
+  // Regression: FL Studio reinitializes prepareToPlay at the start of WAV
+  // export. It must never replace user kits, saved tweaks or patterns.
+  {
+    auto core=std::make_unique<DrumEngine>();
+    core->pattern(0).step[0][0].on=false;
+    core->pattern(0).step[0][3].on=true;
+    core->pattern(0).step[0][3].velocity=.31f;
+    core->setVoiceParam(0,0,.91f);
+    core->prepare(44100.0);
+    core->prepare(48000.0); // second call simulates switching to offline render
+    const auto& p=core->pattern(0);
+    if(p.step[0][0].on||!p.step[0][3].on||
+       std::abs(p.step[0][3].velocity-.31f)>.0001f||
+       std::abs(core->getVoiceParam(0,0)-.91f)>.0001f){
+       log("FAIL: prepareToPlay reset user patterns or sound settings");return 61;
+    }
+  }
+  // MIDI default: FL transport + existing factory steps must NOT play SEQ.
+  {
+    auto midiOnly=std::make_unique<DrumEngine>();
+    midiOnly->prepare(48000);
+    midiOnly->setHost(120,true);
+    midiOnly->setHostPpq(0);
+    midiOnly->setReverbEnabled(false);midiOnly->setDelayEnabled(false);
+    juce::AudioBuffer<float> out(2,8192);
+    midiOnly->process(out);
+    float silent=out.getMagnitude(0,0,8192)+out.getMagnitude(1,0,8192);
+    if(silent>1.e-5f||midiOnly->getTrackStep(0)!=-1){
+       log("FAIL: FL transport launched SEQ while MIDI mode selected");return 62;
+    }
+    // Sample-accurate Piano Roll hit at sample 256 rather than at block start.
+    midiOnly->clearHostMidiEvents();
+    midiOnly->enqueueHostMidi(juce::MidiMessage::noteOn(1,36,(juce::uint8)127),256);
+    midiOnly->process(out);
+    double before=0,after=0;
+    for(int i=0;i<8192;++i){
+      const double v=std::abs(out.getSample(0,i))+std::abs(out.getSample(1,i));
+      if(i<256)before+=v;else after+=v;
+    }
+    if(before>1.e-5||after<.05){
+       log("FAIL: MIDI Piano Roll note was ignored or fired before its sample offset");return 63;
+    }
+    // FL's render resizes the audio engine: notes still work, no SEQ reset.
+    midiOnly->prepare(96000.0);midiOnly->setHost(120,true);
+    midiOnly->clearHostMidiEvents();
+    midiOnly->enqueueHostMidi(juce::MidiMessage::noteOn(1,37,(juce::uint8)127),512);
+    midiOnly->process(out);
+    double rendered=0;for(int i=512;i<8192;++i)rendered+=std::abs(out.getSample(0,i));
+    if(rendered<.05||midiOnly->getTrackStep(1)!=-1){
+       log("FAIL: offline WAV mode did not play MIDI-only Snare");return 64;
+    }
+    // Channel 16 MIDI must not silently switch patterns unless opted in.
+    midiOnly->clearHostMidiEvents();
+    midiOnly->enqueueHostMidi(juce::MidiMessage::noteOn(16,72,(juce::uint8)100),0);
+    midiOnly->process(out);
+    if(midiOnly->getPattern()!=0){
+       log("FAIL: Ch16 piano note switched pattern in MIDI mode");return 65;
+    }
+    // Internal SEQ remains functional after explicit opt-in, but only then.
+    auto sequence=std::make_unique<DrumEngine>();
+    sequence->prepare(48000.0);sequence->setHost(120,true);
+    sequence->setSequencerEnabled(true);
+    sequence->process(out);
+    if(sequence->getTrackStep(0)<0){
+       log("FAIL: internal sequencer cannot run when explicitly selected");return 66;
+    }
+    log("PASS: MIDI/SEQ modes, FL WAV render re-prepare, sample offsets, Ch16 safeguards");
+  }
+
   }
   log("PASS: analog/digital controls audible, open/closed hat tails distinct, short synth preview and GUI synth audition audible, octave tuning and C4 stable, mixer meters active, 64-step bank join and triplet state work, plug-in MIDI audible, page layouts isolated, drummer anchors stable, selectable hat grid, per-step sound automation and Clear Seq, polyrhythm advances independently, state round-trip");return 0;
  }
