@@ -72,3 +72,30 @@ Windows CI + physical FL Studio acceptance remain mandatory before replacing a s
 - Tests cover GUI bank copy/paste, CLEAR scope, stereo chorus, tape, and
   finite output for 5 delay modes. A real FL Studio GUI/audio session remains
   mandatory before production release.
+
+## v0.3.1 — FL Studio MIDI Piano Roll / offline WAV fix
+
+### Main source selector (top-left)
+- **MIDI / PIANO ROLL** (factory default, persisted with FL Project): only incoming MIDI notes trigger sound. FL transport and offline export cannot start the internal sequencer, drummer or song chain.
+- **INTERNAL SEQ**: sequencer patterns follow FL Studio's BPM/transport and the dedicated SEQ RUN / SONG controls. MIDI notes are still playable on top of patterns.
+- Existing presets without `playback_mode` default to MIDI, to prevent unexpected SEQ sounds and inappropriate WAV renders.
+- MIDI Ch 1 notes 36..47 select drum voices 1..12. Ch 2 is for pitched synth. Other notes on Ch 1 and other MIDI channels also trigger the pitched synth.
+- Ch 16 notes 60..91 do **NOT** automatically switch patterns. Set `Enable MIDI Ch16 Pattern Select` in FL Studio's exposed plug-in parameters if specifically needed; it is effective only in SEQ mode.
+- MIDI event sample positions are preserved inside the VST3 audio block; FL Piano Roll velocities and notes determine the generated output without hidden SEQ triggers.
+
+### Critical export and state bug
+The earlier `DrumEngine::prepare()` reinitialized **all factory patterns**. Hosts including FL Studio can call prepare when rendering WAV, switching sample rate, rescanning or reopening plugins. As of v0.3.1, factory patterns are initialized **only in the engine constructor**, not in prepare. The complete kit/state and edited voice sounds survive `prepareToPlay` and offline WAV export.
+
+### FL Studio usage
+1. Load Jerzy Drum Machine v0.3.1, set source **MIDI / PIANO ROLL** in the top-left corner.
+2. Put percussion notes 36..47 in Piano Roll, or use MIDI channel 2 for pitched synth parts.
+3. Save the FL Project, re-open and render Song to WAV. The plugin must reproduce the same incoming MIDI without any internal sequencer.
+4. Select **INTERNAL SEQ** only when using pattern/song generator; the transport can then run its own patterns.
+5. Do not install both old 0.3.0 and 0.3.1 bundles in multiple scanned locations; back up the old bundle before replacing it.
+
+### Automated regressions
+`EngineSmoke.cpp` validates no sequence triggers on host transport in MIDI mode, correct note offset,
+no Ch16 pattern switching by default, preserved sound/pattern data after audio sample-rate prepare,
+and continued functioning of SEQ when explicitly selected.
+
+Native FL Studio verification remains separate from Windows C++ CI.
