@@ -91,14 +91,14 @@ private:
  std::array<std::unique_ptr<SliderAttachment>,6> soundAtt; std::array<std::unique_ptr<SliderAttachment>,15> fxAtt; std::array<std::unique_ptr<ButtonAttachment>,4> fxButtonAtt; std::unique_ptr<SliderAttachment> masterDriveAtt,masterFilterAtt;
  std::array<juce::Slider,6> soundParam; juce::Slider stepVelocity,stepProbability,stepRatchet; std::array<juce::Slider,4> stepSound; bool editingStepSound=false;
  juce::TextButton copyTrack{"COPY TRACK"},pasteTrack{"PASTE TRACK"},duplicateTrack{"DUPLICATE"}; std::array<PatternStep,64> copiedTrack{}; int copiedLength=16; bool copiedTriplet=false,hasCopiedTrack=false; juce::ToggleButton stepAccent{"ACCENT"},stepFlam{"FLAM"}; juce::Slider patternLength,stepMicro;
- juce::ComboBox playbackMode,patternSelect,changeMode,stepNote; std::unique_ptr<ComboAttachment> playbackModeAtt; std::array<juce::Slider,8> genParam;
+ juce::ComboBox playbackMode,patternSelect,changeMode,stepNote; std::array<juce::Slider,8> genParam;
  juce::ToggleButton drummerEnable{"AUTO DRUMMER"}; std::array<juce::ToggleButton,12> trackTripletButtons; std::array<juce::Slider,3> drummerParam; juce::ComboBox drummerStyle,hatDivision,phraseLength,kickDivision;
  std::array<juce::TextButton,16> songSlots; juce::ComboBox songPatternSelect,songSectionSelect; juce::TextButton songAdd{"ADD / UPDATE"},songRemove{"REMOVE SLOT"},songPlay{"PLAY SONG"}; int selectedSongSlot=0;
  juce::TextButton saveKit{"SAVE KIT"},loadKit{"LOAD KIT"}; std::unique_ptr<juce::FileChooser> kitChooser;
  juce::Slider trackLength,artifactAmount,artifactSeed; std::array<juce::Slider,8> synthParam;
  juce::ComboBox synthWave1,synthWave2,songBars,drummerFillEvery,drummerBreakEvery,synthOctave,seqDivision;
  juce::ToggleButton synthOsc2Enable{"OSC 2"},synthFilterEnable{"FILTER"},artifactEnable{"SEED RANDOMIZE"};juce::TextButton randomizeSeed{"NEW SEED"};
- using ComboAttachment=juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+ using ComboAttachment=juce::AudioProcessorValueTreeState::ComboBoxAttachment; std::unique_ptr<ComboAttachment> playbackModeAtt;
  std::array<std::unique_ptr<SliderAttachment>,8> synthAtt; std::array<std::unique_ptr<ComboAttachment>,4> synthWaveAtt; std::array<std::unique_ptr<ButtonAttachment>,3> synthButtonAtt;std::unique_ptr<SliderAttachment> artifactAmountAtt,artifactSeedAtt;
  int bank=0,selectedStep=0; std::array<float,12> channelMeterDisplay{};
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JerzyDrumMachineAudioProcessorEditor)
