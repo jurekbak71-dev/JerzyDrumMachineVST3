@@ -285,6 +285,25 @@ int main()
   }
 
   }
+  // Optional layered synthesis must preserve host MIDI mode and kit state.
+  {
+    auto instrument=std::make_unique<DrumEngine>();instrument->prepare(48000.0);instrument->setHost(120,false);
+    if(std::abs(instrument->getVoiceParam(0,4))>1e-6f){log("FAIL: layered DSP changes old kit defaults");return 71;}
+    instrument->setVoiceParam(0,4,1.0f);instrument->trigger(0,1.0f);
+    juce::AudioBuffer<float> audio(2,8192);instrument->process(audio);
+    double total=0.0;
+    for(int channel=0;channel<2;++channel)for(int i=0;i<audio.getNumSamples();++i){
+        const float value=audio.getSample(channel,i);
+        if(!std::isfinite(value)){log("FAIL: layered DSP not finite");return 72;}
+        total+=std::abs(value);
+    }
+    if(total<.1){log("FAIL: layered DSP silent");return 73;}
+    auto state=instrument->saveState();
+    auto restored=std::make_unique<DrumEngine>();restored->prepare(48000.0);restored->loadState(state);
+    if(std::abs(restored->getVoiceParam(0,4)-1.0f)>1e-5f){log("FAIL: layer missing after kit restore");return 74;}
+    if(restored->getTrackStep(0)!=-1){log("FAIL: layered DSP starts SEQ");return 75;}
+    log("PASS: layered DSP finite output, kit state and MIDI-only mode");
+  }
   log("PASS: analog/digital controls audible, open/closed hat tails distinct, short synth preview and GUI synth audition audible, octave tuning and C4 stable, mixer meters active, 64-step bank join and triplet state work, plug-in MIDI audible, page layouts isolated, drummer anchors stable, selectable hat grid, per-step sound automation and Clear Seq, polyrhythm advances independently, state round-trip");return 0;
  }
  catch(const std::exception& error){log(std::string("FAIL exception: ")+error.what());return 10;}
