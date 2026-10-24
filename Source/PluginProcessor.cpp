@@ -37,6 +37,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout JerzyDrumMachineAudioProcess
   p.push_back(std::make_unique<juce::AudioParameterFloat>(voice+"decay","Voice "+juce::String(i+1)+" Decay",0.0f,1.0f,0.5f));
   p.push_back(std::make_unique<juce::AudioParameterFloat>(voice+"tone","Voice "+juce::String(i+1)+" Tone",0.0f,1.0f,0.5f));
   p.push_back(std::make_unique<juce::AudioParameterFloat>(voice+"character","Voice "+juce::String(i+1)+" Character",0.0f,1.0f,0.5f));
+   p.push_back(std::make_unique<juce::AudioParameterFloat>(voice+"layer","Voice "+juce::String(i+1)+" Layered Synthesis",0.0f,1.0f,0.0f));
  }
  p.push_back(std::make_unique<juce::AudioParameterFloat>("rev_size","Reverb Size",0.0f,1.0f,0.45f));
  p.push_back(std::make_unique<juce::AudioParameterFloat>("rev_damp","Reverb Damping",0.0f,1.0f,0.55f));
@@ -61,7 +62,7 @@ void JerzyDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juc
  for(int i=0;i<12;i++){
   auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";
   engine.gain[i]=param(prefix+"gain");engine.panorama[i]=param(prefix+"pan");engine.channelFilter[i]=param(prefix+"filter");engine.channelDrive[i]=param(prefix+"drive");engine.reverbSend[i]=param(prefix+"rev");engine.delaySend[i]=param(prefix+"del");engine.mute[i]=param(prefix+"mute")>.5f;engine.solo[i]=param(prefix+"solo")>.5f;
-  engine.setVoiceParam(i,0,param(voice+"tune"));engine.setVoiceParam(i,1,param(voice+"decay"));engine.setVoiceParam(i,2,param(voice+"tone"));engine.setVoiceParam(i,3,param(voice+"character"));
+  engine.setVoiceParam(i,0,param(voice+"tune"));engine.setVoiceParam(i,1,param(voice+"decay"));engine.setVoiceParam(i,2,param(voice+"tone"));engine.setVoiceParam(i,3,param(voice+"character"));engine.setVoiceParam(i,4,param(voice+"layer"));
  }
  engine.setReverb(param("rev_size"),param("rev_damp"));engine.setDelay(param("delay_beats"),param("delay_fb"),param("delay_mix"));engine.setMaster(param("master_bass"),param("master_treble"),param("master_comp"));
  double bpm=120; bool playing=true; if(auto*ph=getPlayHead()){if(auto pos=ph->getPosition()){if(auto v=pos->getBpm())bpm=*v;playing=pos->getIsPlaying();if(auto q=pos->getPpqPosition())engine.setHostPpq(*q);}}
@@ -78,7 +79,7 @@ void JerzyDrumMachineAudioProcessor::setStateInformation(const void*d,int n){if(
 void JerzyDrumMachineAudioProcessor::syncParametersFromEngine(){
  auto set=[this](const juce::String&id,float value){if(auto*par=apvts.getParameter(id))par->setValueNotifyingHost(par->convertTo0to1(value));};
  set("drive",engine.drive);
- for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";set(prefix+"gain",engine.gain[i]);set(prefix+"pan",engine.panorama[i]);set(prefix+"filter",engine.channelFilter[i]);set(prefix+"drive",engine.channelDrive[i]);set(prefix+"rev",engine.reverbSend[i]);set(prefix+"del",engine.delaySend[i]);set(prefix+"mute",engine.mute[i]?1.0f:0.0f);set(prefix+"solo",engine.solo[i]?1.0f:0.0f);set(voice+"tune",engine.getVoiceParam(i,0));set(voice+"decay",engine.getVoiceParam(i,1));set(voice+"tone",engine.getVoiceParam(i,2));set(voice+"character",engine.getVoiceParam(i,3));}
+ for(int i=0;i<12;i++){auto prefix="ch"+juce::String(i)+"_";auto voice="v"+juce::String(i)+"_";set(prefix+"gain",engine.gain[i]);set(prefix+"pan",engine.panorama[i]);set(prefix+"filter",engine.channelFilter[i]);set(prefix+"drive",engine.channelDrive[i]);set(prefix+"rev",engine.reverbSend[i]);set(prefix+"del",engine.delaySend[i]);set(prefix+"mute",engine.mute[i]?1.0f:0.0f);set(prefix+"solo",engine.solo[i]?1.0f:0.0f);set(voice+"tune",engine.getVoiceParam(i,0));set(voice+"decay",engine.getVoiceParam(i,1));set(voice+"tone",engine.getVoiceParam(i,2));set(voice+"character",engine.getVoiceParam(i,3));set(voice+"layer",engine.getVoiceParam(i,4));}
  set("rev_size",engine.reverbSize);set("rev_damp",engine.reverbDamping);set("delay_beats",engine.delayBeats);set("delay_fb",engine.delayFeedback);set("delay_mix",engine.delayMix);set("master_bass",engine.masterBass);set("master_treble",engine.masterTreble);set("master_comp",engine.masterComp);
 }
 juce::AudioProcessorEditor* JerzyDrumMachineAudioProcessor::createEditor(){return new JerzyDrumMachineAudioProcessorEditor(*this);}
