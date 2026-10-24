@@ -23,12 +23,16 @@ int main(){
   for(int ch=0;ch<2;ch++)for(int i=0;i<b.getNumSamples();i++){auto x=b.getSample(ch,i);if(!std::isfinite(x)){log("FAIL: non-finite audio");return 4;}energy+=std::abs(x);}
   log(std::string("SMOKE: energy=")+std::to_string(energy));
   if(!(energy>1.0)){log("FAIL: engine produced silence");return 2;}
-  e->gain[0]=0.42f;e->panorama[0]=-0.25f;
+  // Verify enhanced timbre, finite audio and persisted per-voice blend.
+   e->setVoiceParam(0,4,1.0f);e->trigger(0,1.0f);e->process(b);
+   double enhancedEnergy=0;for(int i=0;i<b.getNumSamples();++i){auto x=b.getSample(0,i);if(!std::isfinite(x)){log("FAIL: layered output not finite");return 5;}enhancedEnergy+=std::abs(x);}
+   if(enhancedEnergy<.1){log("FAIL: layered voice is silent");return 6;}
+   e->gain[0]=0.42f;e->panorama[0]=-0.25f;
   auto state=e->saveState();
   log("SMOKE: state saved");
   auto copy=std::make_unique<DrumEngine>();copy->prepare(48000.0);copy->loadState(state);
   log("SMOKE: state restored");
-  if(std::abs(copy->gain[0]-0.42f)>.001f||std::abs(copy->panorama[0]+0.25f)>.001f){log("FAIL: state restore mismatch");return 3;}
+  if(std::abs(copy->gain[0]-0.42f)>.001f||std::abs(copy->panorama[0]+0.25f)>.001f||std::abs(copy->getVoiceParam(0,4)-1.0f)>.001f){log("FAIL: state restore mismatch");return 3;}
   log("PASS: audio and state smoke test");
   return 0;
  }catch(const std::exception&e){log(std::string("FAIL exception: ")+e.what());return 10;}
