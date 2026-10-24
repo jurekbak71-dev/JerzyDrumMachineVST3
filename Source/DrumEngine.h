@@ -11,11 +11,12 @@ struct Pattern { std::array<std::array<PatternStep,64>,12> step{}; int length=16
 struct SampleSlot { juce::AudioBuffer<float> audio; double sourceRate=44100.0,pos=0.0; bool loaded=false,active=false,reverse=false; juce::String sourcePath; float pitch=1.0f,level=1.0f; void trigger(){if(loaded){active=true;pos=reverse?(double)audio.getNumSamples()-1.0:0.0;}} float process(double outRate){if(!loaded||!active||audio.getNumSamples()<2)return 0;int i=juce::jlimit(0,audio.getNumSamples()-2,(int)pos);float frac=(float)(pos-i);float x=audio.getSample(0,i)*(1-frac)+audio.getSample(0,i+1)*frac;double inc=(sourceRate/outRate)*pitch*(reverse?-1.0:1.0);pos+=inc;if(pos<0||pos>=audio.getNumSamples()-1)active=false;return x*level;} };
 
 struct VoiceDSP {
- double sr=44100.0, phase=0, phase2=0; float env=0, noiseEnv=0, velocity=0; int kind=0; float tune=0.5f,decay=0.5f,tone=0.5f,character=0.5f,layerMix=0.0f; juce::Random rng; jerzy_drum::LayeredVoice layered;
- void prepare(double s){sr=s;layered.prepare(s);}
- void trigger(float v,int k){kind=k;velocity=v;env=v;noiseEnv=v;phase=phase2=0;layered.trigger(v,k);}
+ double sr=44100.0, phase=0, phase2=0; float env=0, noiseEnv=0, velocity=0; int kind=0; float tune=0.5f,decay=0.5f,tone=0.5f,character=0.5f,layerMix=0.0f,configuredDecay=-1.0f; juce::Random rng; jerzy_drum::LayeredVoice layered;
+ void prepare(double s){sr=s;layered.prepare(s);configuredDecay=-1.0f;}
+ void trigger(float v,int k){kind=k;velocity=v;env=v;noiseEnv=v;phase=phase2=0;layered.trigger(v,k);layered.configure(decay);configuredDecay=decay;}
  float process(){
   // Both engines advance together; legacy recordings remain identical at LAYER=0.
+  if(layerMix>0.0f && configuredDecay!=decay){layered.configure(decay);configuredDecay=decay;}
   const float modern = layerMix > 0.0f ? layered.next(tune,decay,tone,character) : 0.0f;
   if(env<1.0e-5f && noiseEnv<1.0e-5f)return layerMix*modern;
   const float n=rng.nextFloat()*2.0f-1.0f; double f=80.0;
