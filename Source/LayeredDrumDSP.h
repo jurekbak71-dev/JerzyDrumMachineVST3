@@ -11,10 +11,22 @@ struct LayeredVoice {
     double bodyPhase = 0.0, partialPhase = 0.0;
     float bodyEnv = 0.0f, noiseEnv = 0.0f, clickEnv = 0.0f, sweepEnv = 0.0f;
     float noiseLow = 0.0f, strength = 0.0f;
+    float bodyFall = .999f, noiseFall = .99f, clickFall = .99f, sweepFall = .99f;
     uint32_t seed = 0x12345678u;
     int type = 0;
     static constexpr double twoPi = 6.2831853071795864769;
-    void prepare(double sr) noexcept { sampleRate = std::max(8000.0, sr); reset(); }
+    void prepare(double sr) noexcept { sampleRate = std::max(8000.0, sr); reset(); configure(.5f); }
+    // Called only when DECAY changes; no transcendental coefficients per sample.
+    void configure(float decay) noexcept {
+        decay = std::clamp(decay, 0.0f, 1.0f);
+        const bool kick = type == 0;
+        const bool hat = type == 3 || type == 7;
+        const float seconds = .045f + decay*decay*(kick?1.6f:hat?.65f:1.2f);
+        bodyFall = float(std::exp(-1.0 / (sampleRate * seconds)));
+        noiseFall = float(std::exp(-1.0 / (sampleRate * (.012f + decay*(hat?.28f:.35f)))));
+        clickFall = float(std::exp(-1.0 / (sampleRate * .0025)));
+        sweepFall = float(std::exp(-1.0 / (sampleRate * (kick?.035:.020))));
+    }
     void reset() noexcept {
         bodyPhase = partialPhase = 0.0; bodyEnv = noiseEnv = clickEnv = sweepEnv = noiseLow = strength = 0.0f;
     }
@@ -33,7 +45,7 @@ struct LayeredVoice {
         if(bodyEnv < 1.0e-6f && noiseEnv < 1.0e-6f && clickEnv < 1.0e-6f)
             return 0.0f;
         tune = std::clamp(tune, 0.0f, 1.0f);
-        decay = std::clamp(decay, 0.0f, 1.0f);
+        (void)decay; // decay is configured when the host changes the control.
         tone = std::clamp(tone, 0.0f, 1.0f);
         character = std::clamp(character, 0.0f, 1.0f);
         const bool kick = type == 0;
@@ -63,13 +75,10 @@ struct LayeredVoice {
         const float click = (noise * 0.55f + s2 * 0.45f) * clickEnv * (0.05f + tone * 0.30f);
         const float result = body * bodyEnv * bodyLevel
                            + coloured * noiseEnv * noiseLevel + click;
-        const float seconds = 0.045f + decay * decay * (kick ? 1.6f : hat ? .65f : 1.2f);
-        const float bodyFall = float(std::exp(-1.0 / (sampleRate * seconds)));
-        const float noiseFall = float(std::exp(-1.0 / (sampleRate * (0.012f + decay * (hat ? .28f : .35f)))));
         bodyEnv *= bodyFall;
         noiseEnv *= noiseFall;
-        clickEnv *= float(std::exp(-1.0 / (sampleRate * .0025)));
-        sweepEnv *= float(std::exp(-1.0 / (sampleRate * (kick ? .035 : .020))));
+        clickEnv *= clickFall;
+        sweepEnv *= sweepFall;
         return std::tanh(result * strength * 0.92f);
     }
 };
