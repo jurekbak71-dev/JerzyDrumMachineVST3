@@ -99,3 +99,9 @@ no Ch16 pattern switching by default, preserved sound/pattern data after audio s
 and continued functioning of SEQ when explicitly selected.
 
 Native FL Studio verification remains separate from Windows C++ CI.
+
+## Opcjonalna synteza warstwowa v0.3.1
+
+W SOUND dostępny jest suwak **LAYERED BODY / NOISE / CLICK** dla każdego głosu perkusji (nie dotyczy monofonicznego instrumentu SYNTH). Wartość 0 zachowuje brzmienie historycznego silnika, 1 uruchamia nowe, niezależne składowe: BODY, NOISE, CLICK oraz pitch sweep, wartości pośrednie mieszają dwa silniki. Istniejące parametry TUNE, DECAY, TONE i CHARACTER kontrolują także warstwę. Nowy kontroler `v{n}_layer` jest automatyzowalny i zapisywany do projektu oraz kitu; stary kit domyślnie otrzyma wartość 0. Obsługa MIDI Piano Roll, trybu SEQ, per-step SOUND i eksportu offline pozostaje w gałęzi naprawionej v0.3.1.
+
+Implementacja DSP jest autorska; nie kopiowano kodu Drum Foundry (AGPL). Test dźwięku i roundtrip ustawień dodano do Windows smoke suite.
