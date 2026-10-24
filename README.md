@@ -15,3 +15,14 @@ Każdy push uruchamia Windows build i publikuje ZIP VST3 jako artifact GitHub Ac
 
 
 Build status: CI validation enabled.
+
+## Dodatkowy silnik warstwowy (gałąź expressive-layered-dsp)
+
+Na stronie SOUND dostępny jest piąty parametr **LAYER** dla każdego z 12 głosów:
+- **0**: niezmienione oryginalne brzmienie silnika (zgodność z istniejącymi zestawami i projektami FL Studio).
+- **1**: nowy silnik z osobnymi obwiedniami BODY, NOISE i CLICK, skokiem wysokości na początku uderzenia i dodatkowym rezonansem harmonicznym.
+- **0..1**: mieszanie silników. TUNE, DECAY, TONE i CHARACTER kontrolują również nowe warstwy.
+
+Dla trzech slotów samplerów załadowany WAV ma nadal pierwszeństwo; LAYER wpływa na syntezator awaryjny pustego slotu. Parametr jest automatyzowalny i zapisywany wraz z ustawieniami głosu oraz w plikach kit. Dodane testy smoke sprawdzają dźwięk, NaN/Inf i zapis/odczyt parametru.
+
+Nowy DSP to autorska implementacja Jerzy Audio inspirowana koncepcją syntezy warstwowej, a nie kopia kodu Drum Foundry/AGPL. Implementacja nie ingeruje w mapowanie nut MIDI ani w uruchamianie SEQ przez host.
